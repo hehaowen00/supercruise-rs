@@ -1,30 +1,24 @@
+use crate::codec::prelude::*;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::codec::http::*;
-use crate::codec::{Encoder, Decoder};
 
-use sha::sha1::Sha1;
-use sha::utils::{Digest, DigestExt};
+use crate::context::Body;
 use base64::encode;
 use bytes::BytesMut;
+use http::header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE};
 use http::{Request, Response, StatusCode};
-use http::header::{
-    UPGRADE,
-    CONNECTION,
-    SEC_WEBSOCKET_ACCEPT,
-    SEC_WEBSOCKET_KEY,
-};
+use sha::sha1::Sha1;
+use sha::utils::{Digest, DigestExt};
 
-pub struct WsUpgrader {
-}
+pub struct WsUpgrader {}
 
 impl WsUpgrader {
     const WS_KEY: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    pub async fn upgrade(stream: &mut TcpStream, req: &Request<()>) -> std::io::Result<()> {
+    pub async fn upgrade(stream: &mut TcpStream, req: Request<Body>) -> std::io::Result<()> {
         let headers = req.headers();
         if !headers.contains_key(CONNECTION) || !headers.contains_key(SEC_WEBSOCKET_KEY) {
-            return Err(std::io::Error::other("upgrade failed")); 
+            return Err(std::io::Error::other("upgrade failed"));
         }
 
         let mut http: Http<()> = Http::new();
@@ -32,12 +26,19 @@ impl WsUpgrader {
         builder = builder.header(UPGRADE, "websocket");
         builder = builder.header(CONNECTION, "Upgrade");
 
-        let key = format!("{}{}", &headers[SEC_WEBSOCKET_KEY].to_str().unwrap(), Self::WS_KEY);
+        let key = format!(
+            "{}{}",
+            &headers[SEC_WEBSOCKET_KEY].to_str().unwrap(),
+            Self::WS_KEY
+        );
         let hashed = Sha1::default().digest(key.as_bytes()).to_bytes();
         let encoded = encode(hashed);
         builder = builder.header(SEC_WEBSOCKET_ACCEPT, encoded);
 
-        let resp = builder.status(StatusCode::SWITCHING_PROTOCOLS).body(()).unwrap();
+        let resp = builder
+            .status(StatusCode::SWITCHING_PROTOCOLS)
+            .body(())
+            .unwrap();
 
         let mut buf = BytesMut::new();
 

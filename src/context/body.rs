@@ -13,6 +13,18 @@ enum Kind {
 }
 
 impl Body {
+    pub fn empty() -> Self {
+        Self { kind: Kind::None }
+    }
+
+    pub fn from(bytes: &BytesMut) -> Self {
+        let data = bytes.to_vec();
+
+        Self {
+            kind: Kind::Bytes(data),
+        }
+    }
+
     pub fn as_bytes(&self, dest: &mut BytesMut) {
         match &self.kind {
             Kind::None => return,
@@ -25,16 +37,16 @@ impl Body {
         match &self.kind {
             Kind::None => 0,
             Kind::Bytes(xs) => xs.len(),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
-    pub fn bytes(&self, dest: &mut BytesMut) {
+    pub fn bytes(&self, dest: &mut BytesMut) -> usize {
         match &self.kind {
-            Kind::None => {
-            }
+            Kind::None => 0,
             Kind::Bytes(xs) => {
                 dest.extend_from_slice(&xs);
+                xs.len()
             }
             _ => unreachable!(),
         }
@@ -43,16 +55,14 @@ impl Body {
 
 impl From<()> for Body {
     fn from(_: ()) -> Self {
-        Self {
-            kind: Kind::None,
-        }
+        Self { kind: Kind::None }
     }
 }
 
 impl From<String> for Body {
     fn from(s: String) -> Self {
         Self {
-            kind: Kind::Bytes(s.as_bytes().to_vec())
+            kind: Kind::Bytes(s.as_bytes().to_vec()),
         }
     }
 }
@@ -64,4 +74,3 @@ impl From<Vec<u8>> for Body {
         }
     }
 }
-

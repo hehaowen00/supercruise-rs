@@ -1,8 +1,6 @@
 use bytes::BytesMut;
 
-pub trait Codec<I>: Encoder<I> + Decoder {
-
-}
+pub trait Codec<I>: Encoder<I> + Decoder {}
 
 pub trait Encoder<I> {
     type Error;
@@ -16,4 +14,3 @@ pub trait Decoder {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error>;
 }
-

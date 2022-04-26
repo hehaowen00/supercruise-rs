@@ -4,8 +4,7 @@ use http::{Request, Response};
 use std::fmt::{self, Write};
 use std::marker::PhantomData;
 
-use crate::context::Body;
-use crate::codec::{Encoder, Decoder};
+use crate::codec::{Decoder, Encoder};
 
 pub struct Http<T>(PhantomData<T>);
 
@@ -19,11 +18,7 @@ impl<T> Encoder<Response<()>> for Http<T> {
     type Error = ();
 
     fn encode(&mut self, item: Response<()>, dest: &mut BytesMut) -> Result<(), Self::Error> {
-        write!(
-            ByteWriter(dest),
-            "HTTP/1.1 {}\r\n",
-            item.status(),
-            ).unwrap();
+        write!(ByteWriter(dest), "HTTP/1.1 {}\r\n", item.status(),).unwrap();
 
         for (k, v) in item.headers() {
             dest.extend_from_slice(k.as_str().as_bytes());
@@ -46,7 +41,9 @@ impl Encoder<Response<Body>> for Http<Body> {
             ByteWriter(dest),
             "HTTP/1.1 {}\r\ncontent-length: {}\r\n",
             item.status(),
-            item.body().len()).unwrap();
+            item.body().len(),
+        )
+        .unwrap();
 
         for (k, v) in item.headers() {
             dest.extend_from_slice(k.as_str().as_bytes());
@@ -81,10 +78,9 @@ impl FromBytes for () {
     }
 }
 
-impl<Body> Decoder for Http<Body>
-where
-    Body: FromBytes,
-{
+use crate::context::Body;
+
+impl Decoder for Http<Body> {
     type Item = Request<Body>;
     type Error = ();
 
@@ -121,7 +117,7 @@ where
                 to_slice(r.method.unwrap().as_bytes()),
                 to_slice(r.path.unwrap().as_bytes()),
                 r.version.unwrap(),
-                amt
+                amt,
             )
         };
 
@@ -149,9 +145,7 @@ where
             builder = builder.header(&data[k.0..k.1], value);
         }
 
-        let req = builder
-            .body(Body::from(src))
-            .unwrap();
+        let req = builder.body(Body::from(src)).unwrap();
 
         src.clear();
 
@@ -171,4 +165,3 @@ impl fmt::Write for ByteWriter<'_> {
         fmt::write(self, args)
     }
 }
-

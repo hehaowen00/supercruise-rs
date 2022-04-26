@@ -1,8 +1,4 @@
-use crate::codec::http::Http;
-use crate::context::Body;
-use crate::flow::Context;
-use crate::route::Half;
-
+use crate::prelude::*;
 use async_trait::async_trait;
 use http::Response;
 use tokio::io::AsyncReadExt;
@@ -32,16 +28,17 @@ impl File {
 }
 
 #[async_trait]
-impl Half<Http<Body>> for File {
+impl Route<Http<Body>> for File {
     async fn handle(&self, ctx: &mut Context<Http<Body>>) -> std::io::Result<()> {
         let mut f = tokio::fs::File::open(&self.path).await.unwrap();
         let mut buf = Vec::new();
-        f.read_to_end(&mut buf).await.unwrap();
+        f.read_to_end(&mut buf).await?;
 
         let resp: Response<Body> = Response::builder()
             .header("Content-Type", "text/html")
             .header("Connection", "close")
-            .body(buf.clone().into()).unwrap();
+            .body(buf.clone().into())
+            .unwrap();
 
         ctx.send(resp).await?;
 
@@ -65,7 +62,7 @@ impl Redirect {
 }
 
 #[async_trait]
-impl Half<Http<Body>> for Redirect {
+impl Route<Http<Body>> for Redirect {
     async fn handle(&self, ctx: &mut Context<Http<Body>>) -> std::io::Result<()> {
         Ok(())
     }

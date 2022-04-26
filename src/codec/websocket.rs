@@ -1,8 +1,8 @@
-use std::io::Cursor;
-use bytes::{BytesMut, BufMut};
-use byteorder::{BigEndian, ReadBytesExt};
-use crate::codec::{Encoder, Decoder};
+use crate::codec::{Decoder, Encoder};
 use crate::context::Body;
+use byteorder::{BigEndian, ReadBytesExt};
+use bytes::{BufMut, BytesMut};
+use std::io::Cursor;
 
 use rand::prelude::*;
 
@@ -37,6 +37,10 @@ impl WsFrame {
     pub fn data(&self) -> &[u8] {
         &self.data
     }
+
+    pub fn into_parts(self) -> (Opcode, bool, BytesMut) {
+        (self.opcode, self.masked, self.data)
+    }
 }
 
 pub struct WsFrameBuilder {
@@ -45,9 +49,7 @@ pub struct WsFrameBuilder {
 
 impl WsFrameBuilder {
     pub fn new() -> Self {
-        Self {
-            masked: false,
-        }
+        Self { masked: false }
     }
 }
 
@@ -57,36 +59,32 @@ impl WsFrameBuilder {
         self
     }
 
-    pub fn continuation(self, fragment: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::CONTINUATION, fragment.into())
+    pub fn close(self) -> WsFrame {
+        WsFrame {
+            opcode: Opcode::CLOSE,
+            masked: false,
+            data: BytesMut::new(),
+        }
     }
 
-    pub fn text(self, fragment: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::TEXT, fragment.into())
+    pub fn continuation(self, fragment: impl Into<Body>) -> WsFrame {
+        Self::body(Opcode::CONTINUATION, fragment.into())
     }
 
     pub fn binary(self, fragment: impl Into<Body>) -> WsFrame {
         Self::body(Opcode::BINARY, fragment.into())
     }
 
-    pub fn close(self) -> WsFrame {
-        Self::signal(Opcode::CLOSE)
+    pub fn text(self, fragment: impl Into<Body>) -> WsFrame {
+        Self::body(Opcode::TEXT, fragment.into())
     }
 
-    pub fn ping(self) -> WsFrame {
-        Self::signal(Opcode::PING)
+    pub fn ping(self, data: impl Into<Body>) -> WsFrame {
+        Self::body(Opcode::PING, data.into())
     }
 
-    pub fn pong(self) -> WsFrame {
-        Self::signal(Opcode::PONG)
-    }
-
-    fn signal(opcode: Opcode) -> WsFrame {
-        WsFrame {
-            opcode,
-            masked: false,
-            data: BytesMut::new(),
-        }
+    pub fn pong(self, data: impl Into<Body>) -> WsFrame {
+        Self::body(Opcode::PONG, data.into())
     }
 
     fn body(opcode: Opcode, body: Body) -> WsFrame {
@@ -128,7 +126,7 @@ impl From<u8> for Opcode {
             0x8 => CLOSE,
             0x9 => PING,
             0xA => PONG,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }
@@ -168,10 +166,10 @@ impl Decoder for Ws {
         match opcode {
             TEXT | BINARY | PING | PONG | CLOSE => {
                 self.opcode = Some(opcode.clone());
-            },
+            }
             _ => {}
         }
-        
+
         // println!("fin {} opcode {:?}", fin, opcode);
 
         curr += 1;
@@ -189,11 +187,11 @@ impl Decoder for Ws {
             curr += 2;
             arr.read_u16::<BigEndian>().unwrap() as usize
         } else if length == 127 {
-            let mut arr = Cursor::new(&src[curr.. curr + 8]);
+            let mut arr = Cursor::new(&src[curr..curr + 8]);
             curr += 8;
             arr.read_u64::<BigEndian>().unwrap() as usize
         } else {
-            return Err(())
+            return Err(());
         };
 
         // println!("masked {} length {}", is_masked, length);
@@ -210,7 +208,7 @@ impl Decoder for Ws {
             // println!("not enough bytes for complete message {}\n", src[curr..].len());
 
             return Ok(None);
-        } 
+        }
 
         if is_masked {
             for (i, b) in src[curr..].iter().enumerate() {
@@ -230,7 +228,7 @@ impl Decoder for Ws {
                 };
                 src.clear();
                 Ok(Some(result))
-            },
+            }
             false => {
                 self.data = Some(decoded);
                 src.clear();
@@ -248,24 +246,24 @@ impl Encoder<WsFrame> for Ws {
 
         use Opcode::*;
 
-        let mask_bit = if item.masked {
-            MASK
-        } else {
-            0
-        };
+        let mask_bit = if item.masked { MASK } else { 0 };
 
         match item.opcode {
             BINARY | TEXT => {
                 let fin_opcode = FIN | item.opcode as u8;
 
+                /*
                 let mask_length = if item.data.len() <= 125 {
                     mask_bit | item.data.len() as u8
                 } else {
                     126
                 };
+                */
 
                 dest.put_u8(fin_opcode);
-                dest.put_u8(mask_length);
+                // dest.put_u8(mask_length);
+
+                mask_length(dest, mask_bit, item.data.len());
 
                 let mut mask = [0; 4];
 
@@ -283,7 +281,7 @@ impl Encoder<WsFrame> for Ws {
                 }
 
                 dest.extend_from_slice(&temp);
-            },
+            }
             CLOSE | PING | PONG => {
                 let fin_opcode = FIN | item.opcode as u8;
 
@@ -291,10 +289,34 @@ impl Encoder<WsFrame> for Ws {
 
                 dest.put_u8(fin_opcode);
                 dest.put_u8(mask_length);
-            },
+            }
             _ => {}
         }
 
         Ok(())
+    }
+}
+
+fn mask_length(dest: &mut BytesMut, mask_bit: u8, length: usize) {
+    match length {
+        x if x <= 125 => {
+            dest.put_u8(mask_bit | length as u8);
+        }
+        x if x <= 65535 => {
+            let len = x as u16;
+
+            println!("126 | len {}", len);
+
+            dest.put_u8(mask_bit | 126);
+            dest.extend_from_slice(&len.to_be_bytes());
+        }
+        x => {
+            let len = x;
+
+            println!("127 | len {}", len);
+
+            dest.put_u8(mask_bit | 127);
+            dest.extend_from_slice(&len.to_be_bytes());
+        }
     }
 }

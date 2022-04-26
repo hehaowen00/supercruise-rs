@@ -1,5 +1,11 @@
 mod codec;
-pub use codec::{Encoder, Decoder};
+pub(crate) mod http;
+pub(crate) mod websocket;
 
-pub mod http;
-pub mod websocket;
+pub(crate) use codec::{Decoder, Encoder};
+
+pub(crate) mod prelude {
+    pub use super::codec::{Decoder, Encoder};
+    pub use super::http::*;
+    pub use super::websocket::*;
+}
