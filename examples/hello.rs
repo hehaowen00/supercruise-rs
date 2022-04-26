@@ -43,9 +43,9 @@ async fn index(_req: Request<Body>) -> std::io::Result<Response<Body>> {
 
     let resp: Response<Body> = Response::builder()
         .status(StatusCode::OK)
-        .header("Content-Type", "text/html")
+        .header("Content-Type", "text/plain")
         .header("Connection", "close")
-        .body(buf.clone().into())
+        .body(String::from("Hello World!").into())
         .unwrap();
 
     Ok(resp)

@@ -2,9 +2,8 @@ use crate::codec::{Decoder, Encoder};
 use crate::context::Body;
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{BufMut, BytesMut};
-use std::io::Cursor;
-
 use rand::prelude::*;
+use std::io::Cursor;
 
 const FIN: u8 = 0x80;
 const MASK: u8 = 0x80;

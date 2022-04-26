@@ -1,5 +1,7 @@
 use crate::codec::prelude::*;
 use crate::context::Body;
+use crate::context::Context;
+use crate::router::EndpointT;
 use crate::Router;
 use bytes::BytesMut;
 use http::Request;
@@ -7,22 +9,17 @@ use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 
-pub async fn process(router: Arc<Router>, stream: TcpStream) -> std::io::Result<()> {
+use crate::ws::WsUpgrader;
+
+pub async fn process(router: Arc<Router>, mut stream: TcpStream) -> std::io::Result<()> {
     let mut bytes = BytesMut::new();
 
-    let mut cont = Some(stream);
+    stream.set_nodelay(true).unwrap();
 
     loop {
-        if let None = cont {
-            break;
-        }
-        let mut stream = cont.take().unwrap();
-
-        stream.set_nodelay(true).unwrap();
+        let mut codec = Http::new();
 
         stream.read_buf(&mut bytes).await?;
-
-        let mut codec = Http::new();
 
         let mut res = codec.decode(&mut bytes);
 
@@ -37,11 +34,29 @@ pub async fn process(router: Arc<Router>, stream: TcpStream) -> std::io::Result<
         };
 
         match router.route(req.method(), req.uri().path()).await {
-            Some(endpoint) => match endpoint.handle(stream, req).await? {
-                Some(stream) => cont = Some(stream),
-                None => {}
+            Some(e) => match &*e {
+                EndpointT::Http(r) => {
+                    let mut context: Context<Http<_>> = Context::from(&mut stream);
+
+                    let resp = r.handle(req).await?;
+
+                    context.send(resp).await?;
+                }
+                EndpointT::Ws(r) => {
+                    WsUpgrader::upgrade(&mut stream, req).await?;
+
+                    let mut context = Context::<Ws>::from(&mut stream);
+
+                    r.handle(&mut context).await?;
+
+                    let close = WsFrame::builder().close();
+
+                    context.send(close).await?;
+
+                    break;
+                }
             },
-            None => break,
+            None => unreachable!(),
         }
     }
 

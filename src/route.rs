@@ -43,6 +43,7 @@ where
         self(req).await
     }
 }
+
 #[async_trait]
 impl<F, R> Route<Http<Body>> for F
 where

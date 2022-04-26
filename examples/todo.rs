@@ -1,3 +1,4 @@
+use supercruise_rs::common::Dir;
 use supercruise_rs::prelude::*;
 
 use once_cell::sync::Lazy;
@@ -13,13 +14,20 @@ static ID_COUNTER: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::from(0));
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Todo {
-    id: String,
+    id: u64,
     text: String,
     status: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Message {
+    id: Option<u64>,
+    text: Option<String>,
+    status: Option<bool>,
+}
+
 impl Todo {
-    pub fn new(id: String, text: String) -> Self {
+    pub fn new(id: u64, text: String) -> Self {
         Self {
             id,
             text,
@@ -56,8 +64,9 @@ async fn get_todos(req: Request<Body>) -> std::io::Result<Response<Body>> {
 
 async fn post_todo(req: Request<Body>) -> std::io::Result<Response<Body>> {
     let id = ID_COUNTER.fetch_add(1, Ordering::AcqRel);
+
     let mut items = TODOS.lock().await;
-    items.insert(id, Todo::new(id.to_string(), format!("Task {}", id)));
+    items.insert(id, Todo::new(id, format!("Task {}", id)));
 
     let resp = Response::builder()
         .status(StatusCode::OK)
@@ -67,7 +76,9 @@ async fn post_todo(req: Request<Body>) -> std::io::Result<Response<Body>> {
     Ok(resp)
 }
 
-async fn update_todo() {}
+async fn update_todo() {
+    let mut items = TODOS.lock().await;
+}
 
 async fn delete_todo() {
     let mut items = TODOS.lock().await;
@@ -76,6 +87,7 @@ async fn delete_todo() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new()
+        .get("/static/*", Dir::new("static"))
         .get("/", index)
         .get("/todos", get_todos)
         .post("/todos", post_todo);

@@ -9,18 +9,22 @@ use trie_rs::radix::RadixNode;
 use trie_rs::TrieExt;
 
 pub struct Router {
-    get_routes: RadixNode<String, Arc<Box<dyn Endpoint>>>,
-    post_routes: RadixNode<String, Arc<Box<dyn Endpoint>>>,
-    put_routes: RadixNode<String, Arc<Box<dyn Endpoint>>>,
-    delete_routes: RadixNode<String, Arc<Box<dyn Endpoint>>>,
-    ws: Option<Arc<Box<dyn Endpoint>>>,
-    middleware: Vec<()>,
-    not_found: Option<Arc<Box<dyn Endpoint>>>,
+    get_routes: RadixNode<String, Arc<EndpointR>>,
+    post_routes: RadixNode<String, Arc<EndpointR>>,
+    put_routes: RadixNode<String, Arc<EndpointR>>,
+    delete_routes: RadixNode<String, Arc<EndpointR>>,
+    ws: Option<Arc<EndpointR>>,
+    not_found: Option<Arc<EndpointR>>,
+}
+
+pub(crate) enum EndpointR {
+    Http(Box<dyn HttpRoute + Send + Sync>),
+    Ws(Box<dyn Route<Ws> + Send + Sync>),
 }
 
 impl Router {
     pub fn new() -> Self {
-        let e = HttpEndpoint::new(NotFound {});
+        let e = NotFound {};
 
         Self {
             ws: None,
@@ -28,8 +32,7 @@ impl Router {
             post_routes: RadixNode::new(),
             put_routes: RadixNode::new(),
             delete_routes: RadixNode::new(),
-            middleware: Vec::new(),
-            not_found: Some(Arc::new(Box::new(e))),
+            not_found: Some(Arc::new(EndpointR::Http(Box::new(e)))),
         }
     }
 
@@ -37,7 +40,7 @@ impl Router {
     where
         R: HttpRoute + Send + Sync + 'static,
     {
-        let route: Arc<Box<dyn Endpoint>> = Arc::new(Box::new(HttpEndpoint::new(route)));
+        let route: Arc<EndpointR> = Arc::new(EndpointR::Http(Box::new(route)));
         let xs: Vec<_> = if path == "/" {
             vec![path.to_string()]
         } else {
@@ -54,7 +57,7 @@ impl Router {
     where
         R: HttpRoute + Send + Sync + 'static,
     {
-        let route: Arc<Box<dyn Endpoint>> = Arc::new(Box::new(HttpEndpoint::new(route)));
+        let route: Arc<EndpointR> = Arc::new(EndpointR::Http(Box::new(route)));
         let xs: Vec<_> = if path == "/" {
             vec![path.to_string()]
         } else {
@@ -89,7 +92,7 @@ impl Router {
     where
         R: Route<Ws> + Send + Sync + 'static,
     {
-        let route: Arc<Box<dyn Endpoint>> = Arc::new(Box::new(WsEndpoint::new(route)));
+        let route: Arc<EndpointR> = Arc::new(EndpointR::Ws(Box::new(route)));
 
         self.ws = Some(route);
         self
@@ -99,7 +102,8 @@ impl Router {
         self
     }
 
-    pub async fn route(&self, method: &Method, path: &str) -> Option<Arc<Box<dyn Endpoint>>> {
+    #[inline]
+    pub(crate) async fn route(&self, method: &Method, path: &str) -> Option<Arc<EndpointR>> {
         let xs: Vec<_> = if path == "/" {
             vec![path.to_string()]
         } else {

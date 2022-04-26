@@ -1,10 +1,10 @@
+use crate::codec::{Decoder, Encoder};
+use crate::context::Body;
 use bytes::BytesMut;
 use http::header::HeaderValue;
 use http::{Request, Response};
 use std::fmt::{self, Write};
 use std::marker::PhantomData;
-
-use crate::codec::{Decoder, Encoder};
 
 pub struct Http<T>(PhantomData<T>);
 
@@ -13,72 +13,6 @@ impl<T> Http<T> {
         Http(PhantomData)
     }
 }
-
-impl<T> Encoder<Response<()>> for Http<T> {
-    type Error = ();
-
-    fn encode(&mut self, item: Response<()>, dest: &mut BytesMut) -> Result<(), Self::Error> {
-        write!(ByteWriter(dest), "HTTP/1.1 {}\r\n", item.status(),).unwrap();
-
-        for (k, v) in item.headers() {
-            dest.extend_from_slice(k.as_str().as_bytes());
-            dest.extend_from_slice(b": ");
-            dest.extend_from_slice(v.as_bytes());
-            dest.extend_from_slice(b"\r\n");
-        }
-
-        dest.extend_from_slice(b"\r\n");
-
-        Ok(())
-    }
-}
-
-impl Encoder<Response<Body>> for Http<Body> {
-    type Error = ();
-
-    fn encode(&mut self, item: Response<Body>, dest: &mut BytesMut) -> Result<(), Self::Error> {
-        write!(
-            ByteWriter(dest),
-            "HTTP/1.1 {}\r\ncontent-length: {}\r\n",
-            item.status(),
-            item.body().len(),
-        )
-        .unwrap();
-
-        for (k, v) in item.headers() {
-            dest.extend_from_slice(k.as_str().as_bytes());
-            dest.extend_from_slice(b": ");
-            dest.extend_from_slice(v.as_bytes());
-            dest.extend_from_slice(b"\r\n");
-        }
-
-        dest.extend_from_slice(b"\r\n");
-        item.body().bytes(dest);
-
-        Ok(())
-    }
-}
-
-pub trait FromBytes
-where
-    Self: Sized,
-{
-    fn from(bytes: &BytesMut) -> Self;
-}
-
-impl FromBytes for BytesMut {
-    fn from(bytes: &BytesMut) -> Self {
-        bytes.clone()
-    }
-}
-
-impl FromBytes for () {
-    fn from(_bytes: &BytesMut) -> () {
-        ()
-    }
-}
-
-use crate::context::Body;
 
 impl Decoder for Http<Body> {
     type Item = Request<Body>;
@@ -150,6 +84,51 @@ impl Decoder for Http<Body> {
         src.clear();
 
         Ok(Some(req))
+    }
+}
+
+impl<T> Encoder<Response<()>> for Http<T> {
+    type Error = ();
+
+    fn encode(&mut self, item: Response<()>, dest: &mut BytesMut) -> Result<(), Self::Error> {
+        write!(ByteWriter(dest), "HTTP/1.1 {}\r\n", item.status(),).unwrap();
+
+        for (k, v) in item.headers() {
+            dest.extend_from_slice(k.as_str().as_bytes());
+            dest.extend_from_slice(b": ");
+            dest.extend_from_slice(v.as_bytes());
+            dest.extend_from_slice(b"\r\n");
+        }
+
+        dest.extend_from_slice(b"\r\n");
+
+        Ok(())
+    }
+}
+
+impl Encoder<Response<Body>> for Http<Body> {
+    type Error = ();
+
+    fn encode(&mut self, item: Response<Body>, dest: &mut BytesMut) -> Result<(), Self::Error> {
+        write!(
+            ByteWriter(dest),
+            "HTTP/1.1 {}\r\ncontent-length: {}\r\n",
+            item.status(),
+            item.body().len(),
+        )
+        .unwrap();
+
+        for (k, v) in item.headers() {
+            dest.extend_from_slice(k.as_str().as_bytes());
+            dest.extend_from_slice(b": ");
+            dest.extend_from_slice(v.as_bytes());
+            dest.extend_from_slice(b"\r\n");
+        }
+
+        dest.extend_from_slice(b"\r\n");
+        item.body().bytes(dest);
+
+        Ok(())
     }
 }
 

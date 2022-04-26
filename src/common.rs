@@ -15,6 +15,18 @@ impl Dir {
     }
 }
 
+#[async_trait]
+impl HttpRoute for Dir {
+    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
+        let resp = Response::builder()
+            .status(StatusCode::OK)
+            .body(String::from("ok").into())
+            .unwrap();
+
+        Ok(resp)
+    }
+}
+
 pub struct File {
     path: std::path::PathBuf,
 }

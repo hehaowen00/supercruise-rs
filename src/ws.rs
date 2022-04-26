@@ -10,7 +10,7 @@ use http::{Request, Response, StatusCode};
 use sha::sha1::Sha1;
 use sha::utils::{Digest, DigestExt};
 
-pub struct WsUpgrader {}
+pub struct WsUpgrader;
 
 impl WsUpgrader {
     const WS_KEY: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
