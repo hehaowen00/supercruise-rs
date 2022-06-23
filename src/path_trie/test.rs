@@ -345,7 +345,6 @@ fn loc(s: &str, p: &str) -> usize {
         .sum()
 }
 
-
 #[test]
 fn routing_test() {
     let mut tree = PathTree::new();
@@ -354,4 +353,3 @@ fn routing_test() {
     tree.insert("users", 1);
     println!("{:#?}", tree);
 }
-

@@ -1,5 +1,7 @@
 pub(crate) mod node;
 pub mod params;
+#[cfg(test)]
+mod test;
 
 use crate::codec::websocket::Ws;
 use crate::route::{Endpoint, HttpEndpoint, HttpRoute, Route, WsEndpoint};
