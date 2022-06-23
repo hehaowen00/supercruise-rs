@@ -9,7 +9,6 @@ pub struct Body {
 enum Kind {
     None,
     Bytes(Vec<u8>),
-    Stream(),
 }
 
 impl Body {
@@ -56,6 +55,14 @@ impl Body {
 impl From<()> for Body {
     fn from(_: ()) -> Self {
         Self { kind: Kind::None }
+    }
+}
+
+impl From<&'static str> for Body {
+    fn from(s: &'static str) -> Self {
+        Self {
+            kind: Kind::Bytes(s.as_bytes().to_vec()),
+        }
     }
 }
 
