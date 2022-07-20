@@ -9,3 +9,6 @@ pub(crate) mod prelude {
     pub use super::http::*;
     pub use super::websocket::*;
 }
+
+#[cfg(test)]
+mod http_test;

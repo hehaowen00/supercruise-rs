@@ -1,7 +1,6 @@
 use crate::codec::http::*;
 use crate::codec::websocket::*;
-use crate::context::Body;
-use crate::context::Context;
+use crate::context::{Body, Context};
 use crate::ws::WsUpgrader;
 
 use async_trait::async_trait;

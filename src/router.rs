@@ -14,7 +14,7 @@ pub struct Router {
     put_routes: RadixNode<String, Arc<EndpointR>>,
     delete_routes: RadixNode<String, Arc<EndpointR>>,
     ws: Option<Arc<EndpointR>>,
-    not_found: Option<Arc<EndpointR>>,
+    not_found: Arc<EndpointR>,
 }
 
 pub(crate) enum EndpointR {
@@ -32,7 +32,7 @@ impl Router {
             post_routes: RadixNode::new(),
             put_routes: RadixNode::new(),
             delete_routes: RadixNode::new(),
-            not_found: Some(Arc::new(EndpointR::Http(Box::new(e)))),
+            not_found: Arc::new(EndpointR::Http(Box::new(e))),
         }
     }
 
@@ -103,7 +103,7 @@ impl Router {
     }
 
     #[inline]
-    pub(crate) async fn route(&self, method: &Method, path: &str) -> Option<Arc<EndpointR>> {
+    pub(crate) fn route(&self, method: &Method, path: &str) -> Arc<EndpointR> {
         let xs: Vec<_> = if path == "/" {
             vec![path.to_string()]
         } else {
@@ -114,16 +114,16 @@ impl Router {
         };
 
         if path == "/ws" {
-            return self.ws.clone();
+            return self.ws.clone().unwrap();
         }
 
         match method {
             &Method::GET => match self.get_routes.get(&xs) {
-                Some(r) => Some(r.clone()),
+                Some(r) => r.clone(),
                 _ => self.not_found.clone(),
             },
             &Method::POST => match self.post_routes.get(&xs) {
-                Some(r) => Some(r.clone()),
+                Some(r) => r.clone(),
                 _ => self.not_found.clone(),
             },
             _ => self.not_found.clone(),

@@ -4,6 +4,7 @@ pub mod codec;
 pub mod common;
 pub mod context;
 pub mod flow;
+pub mod path_trie;
 pub mod route;
 pub mod router;
 mod ws;
@@ -16,11 +17,10 @@ pub mod prelude {
     pub use http::{Method, Request, Response, StatusCode};
 }
 
+pub use http::Method;
 use router::Router;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-
-pub use http::Method;
 
 pub async fn serve(router: Router) -> Result<(), Box<dyn std::error::Error>> {
     let addr = "127.0.0.1:8080";
