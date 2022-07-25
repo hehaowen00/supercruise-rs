@@ -43,17 +43,16 @@ async fn index(_req: Request<Body>) -> std::io::Result<Response<Body>> {
 
     let resp: Response<Body> = Response::builder()
         .status(StatusCode::OK)
-        .header("Content-Type", "text/plain")
+        .header("Content-Type", "text/html")
         .header("Connection", "close")
-        .body(String::from("Hello World!").into())
+        .body(buf.into())
         .unwrap();
 
     Ok(resp)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    env_logger::init();
     let router = Router::new().get("/", index).ws("/ws", Hello {});
-
-    supercruise_rs::serve(router).await
+    supercruise_rs::start_server("0.0.0.0:8080", router);
 }

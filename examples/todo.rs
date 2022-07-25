@@ -84,13 +84,13 @@ async fn delete_todo() {
     let mut items = TODOS.lock().await;
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let router = Router::new()
         .get("/static/*", Dir::new("static"))
         .get("/", index)
         .get("/todos", get_todos)
         .post("/todos", post_todo);
 
-    supercruise_rs::serve(router).await
+    // supercruise_rs::serve(router).await
+    supercruise_rs::start_server("0.0.0.0:8080", router);
 }
