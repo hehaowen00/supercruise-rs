@@ -16,4 +16,7 @@ fn main() {
     node.insert(&keys, 3);
 
     println!("{:#?}", node);
+
+    let res = node.get("/api/hello/world");
+    println!("{:?}", res);
 }

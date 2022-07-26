@@ -42,7 +42,7 @@ impl<T> Node<T> {
 
             let lhs = &nodes[index].path;
 
-            let (cs, partial) = common_str(&lhs[0], &keys[0]);
+            let cs = common_str(&lhs[0], &keys[0]);
             println!("cs {:?}", cs);
 
             if cs == "" {
@@ -53,15 +53,17 @@ impl<T> Node<T> {
             println!("t {:?} {:?}", cs, lhs[0]);
 
             if cs == &lhs[0] {
-                let count = compare_keys(&lhs, &keys);
-                println!("count {:?} {:?} {:?}", count, &lhs, &keys);
+                // println!("count {:?} {:?} {:?}", count, &lhs, &keys);
 
                 if cs.len() < keys[0].len() {
                     let mut pk = keys.to_vec().clone();
                     pk[0] = pk[0][cs.len()..].to_string();
                     println!("{:?}", pk);
                     nodes[index].insert(&pk, value);
-                } else if count == lhs.len() && count < keys.len() && !partial {
+                    break;
+                }
+                let count = compare_keys(&lhs, &keys);
+                if count == lhs.len() && count < keys.len() {
                     nodes[index].insert(&keys[count..], value);
                 }
             } else {
@@ -81,6 +83,7 @@ impl<T> Node<T> {
 
                 root.children.push(old);
                 root.children.push(new);
+                root.children.sort_by_key(|e| e.path.clone());
 
                 nodes.push(root);
             }
@@ -90,21 +93,34 @@ impl<T> Node<T> {
         }
     }
 
-    pub fn get<'a, 'b>(&'a self, key: &'b str) -> Option<&(T, Params<'a, 'b>)> {
-        let keys = parse_key(key).unwrap();
+    pub fn get<'a, 'b>(&'a self, key: &'b str) -> Option<(T, Params<'a, 'b>)> {
+        let mut params = Params::new();
+
+        let s = until(&key[1..], "/");
+        println!("{:?}", s);
 
         None
     }
 }
 
-fn common_str<'a, 'b>(a: &'a str, b: &'b str) -> (&'a str, bool) {
+fn common_str<'a, 'b>(a: &'a str, b: &'b str) -> &'a str {
     let min = std::cmp::min(a.len(), b.len());
     for i in 0..min {
         if a[i..i + 1] != b[i..i + 1] {
-            return (&a[..i], true);
+            return &a[..i];
         }
     }
-    (&a[..min], false)
+    &a[..min]
+}
+
+fn until<'a, 'b>(a: &'a str, b: &'b str) -> &'a str {
+    let mut i = 0;
+    for i in 0..a.len() {
+        if &a[i..i + 1] == b {
+            return &a[..i];
+        }
+    }
+    a
 }
 
 fn compare_keys(a: &[String], b: &[String]) -> usize {
@@ -123,6 +139,21 @@ fn compare_keys(a: &[String], b: &[String]) -> usize {
     min
 }
 
+fn match_route<'a, 'b>(params: &mut Params<'a, 'b>, keys: &'a [String], s: &'b mut str) -> bool {
+    let mut index = 0;
+    for k in keys {
+        match &k[1..] {
+            "*" => {
+                return true;
+            }
+            ":" => {}
+            _ => {}
+        }
+    }
+
+    false
+}
+
 #[derive(Debug)]
 pub enum PathParseError<'a> {
     InsufficientLength,
@@ -134,7 +165,7 @@ pub fn parse_key<'a>(key: &'a str) -> Result<Vec<String>, PathParseError<'a>> {
 
     let parts = key.split("/");
 
-    let mut buf = String::new();
+    let mut buf = String::from("/");
     let mut end = false;
 
     for p in parts.filter(|s| s != &"") {
@@ -229,22 +260,18 @@ fn test_node() {
         path: vec![],
         data: None,
         children: vec![Node {
-            path: vec!["a".to_string()],
+            path: vec!["/a".to_string()],
             data: None,
             children: vec![
+                Node {
+                    path: vec!["/b/".to_string(), "*".to_string()],
+                    data: Some(4),
+                    children: vec![],
+                },
                 Node {
                     path: vec!["pi/".to_string()],
                     data: None,
                     children: vec![
-                        Node {
-                            path: vec!["hello/".to_string(), ":name".to_string()],
-                            data: Some(1),
-                            children: vec![Node {
-                                path: vec![":age".to_string()],
-                                data: Some(3),
-                                children: vec![],
-                            }],
-                        },
                         Node {
                             path: vec![
                                 "goodbye/".to_string(),
@@ -254,12 +281,16 @@ fn test_node() {
                             data: Some(2),
                             children: vec![],
                         },
+                        Node {
+                            path: vec!["hello/".to_string(), ":name".to_string()],
+                            data: Some(1),
+                            children: vec![Node {
+                                path: vec![":age".to_string()],
+                                data: Some(3),
+                                children: vec![],
+                            }],
+                        },
                     ],
-                },
-                Node {
-                    path: vec!["/b/".to_string(), "*".to_string()],
-                    data: Some(4),
-                    children: vec![],
                 },
             ],
         }],
@@ -274,22 +305,18 @@ fn test_node_get() {
         path: vec![],
         data: None,
         children: vec![Node {
-            path: vec!["a".to_string()],
+            path: vec!["/a".to_string()],
             data: None,
             children: vec![
+                Node {
+                    path: vec!["/b".to_string(), "*".to_string()],
+                    data: Some(4),
+                    children: vec![],
+                },
                 Node {
                     path: vec!["pi/".to_string()],
                     data: None,
                     children: vec![
-                        Node {
-                            path: vec!["hello/".to_string(), ":name".to_string()],
-                            data: Some(1),
-                            children: vec![Node {
-                                path: vec![":age".to_string()],
-                                data: Some(3),
-                                children: vec![],
-                            }],
-                        },
                         Node {
                             path: vec![
                                 "goodbye/".to_string(),
@@ -299,31 +326,35 @@ fn test_node_get() {
                             data: Some(2),
                             children: vec![],
                         },
+                        Node {
+                            path: vec!["hello/".to_string(), ":name".to_string()],
+                            data: Some(1),
+                            children: vec![Node {
+                                path: vec![":age".to_string()],
+                                data: Some(3),
+                                children: vec![],
+                            }],
+                        },
                     ],
-                },
-                Node {
-                    path: vec!["/b".to_string(), "*".to_string()],
-                    data: Some(4),
-                    children: vec![],
                 },
             ],
         }],
     };
 
     let (r, params) = trie.get("/api/hello/world").unwrap();
-    assert_eq!(*r, 1);
+    assert_eq!(r, 1);
     assert_eq!(params.get("name"), Some("world"));
 
     let (r, params) = trie.get("/api/goodbye/world/2").unwrap();
-    assert_eq!(*r, 2);
+    assert_eq!(r, 2);
     assert_eq!(params.get("name"), Some("world"));
     assert_eq!(params.get("age"), Some("2"));
 
     let (r, params) = trie.get("/api/hello/world/2").unwrap();
-    assert_eq!(*r, 3);
+    assert_eq!(r, 3);
     assert_eq!(params.get("name"), Some("world"));
     assert_eq!(params.get("age"), Some("2"));
 
     let (r, _params) = trie.get("/a/b/string").unwrap();
-    assert_eq!(*r, 4);
+    assert_eq!(r, 4);
 }
