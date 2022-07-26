@@ -2,9 +2,18 @@ use supercruise_rs::path_trie::node::*;
 
 fn main() {
     let mut node = Node::new(vec![]);
-    node.insert("/api/hello/:name", 1);
-    node.insert("/api/goodbye/:name", 2);
-    node.insert("/query/*", 4);
-    node.insert("/api/afternoon/:name", 2);
+
+    let keys = parse_key("/api/hello/:name").unwrap();
+    node.insert(&keys, 1);
+
+    let keys = parse_key("/api/goodbye/:name/:age").unwrap();
+    node.insert(&keys, 2);
+
+    let keys = parse_key("/a/b/*").unwrap();
+    node.insert(&keys, 4);
+
+    let keys = parse_key("/api/hello/:name/:age").unwrap();
+    node.insert(&keys, 3);
+
     println!("{:#?}", node);
 }
