@@ -4,28 +4,8 @@ use super::params::Params;
 pub struct Node<T> {
     path: Vec<String>,
     data: Option<T>,
-    index: Option<String>,
     children: Vec<Self>,
 }
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum PathNode {
-    Static(String),
-    Param(String),
-    Wildcard,
-}
-
-const SMALL: usize = 4;
-
-enum NodeChildren<T> {
-    Small([Option<T>; SMALL], usize),
-    Large(Vec<T>),
-}
-
-// index is used to find the position of nodes
-// wildcards use * and params use :<id>
-// a wildcard and param cannot exist in the same node logically
-// only one of either
 
 impl<T> Node<T> {
     #[inline]
@@ -33,7 +13,6 @@ impl<T> Node<T> {
         Self {
             path,
             data: None,
-            index: None,
             children: Vec::new(),
         }
     }
@@ -41,29 +20,11 @@ impl<T> Node<T> {
     pub fn insert(&mut self, key: &str, value: T) {
         let keys = parse_key(key).unwrap();
 
+        println!("{:?}", keys);
+
         if keys.len() == 0 {
             self.data = Some(value);
             return;
-        }
-
-        let mut index = self.index.get_or_insert_with(String::new);
-
-        match &keys[0][0..1] {
-            ":" => {
-                if index.contains(':') {
-                    panic!();
-                }
-                index.push(':');
-            }
-            "*" => {
-                index.push('*');
-                if index.contains('*') {
-                    panic!();
-                }
-            }
-            c => {
-                index.push_str(c);
-            }
         }
 
         if self.children.len() == 0 {
@@ -72,37 +33,22 @@ impl<T> Node<T> {
             self.children.push(node);
             return;
         }
-
-        for child in &mut self.children {
-            let path = &child.path;
-        }
     }
 
-    pub fn get<'a, 'b>(&self, key: &str) -> Option<&(T, Params<'a, 'b>)> {
+    pub fn get<'a, 'b>(&'a self, key: &'b str) -> Option<&(T, Params<'a, 'b>)> {
         let keys = parse_key(key).unwrap();
 
         None
     }
 }
 
-impl PathNode {
-    pub fn concat_static(&self, rhs: &Self) -> Result<Self, ()> {
-        match (self, rhs) {
-            (PathNode::Static(a), PathNode::Static(b)) => {
-                Ok(PathNode::Static(format!("{}{}", a, b)))
-            }
-            _ => Err(()),
-        }
-    }
-}
-
 #[derive(Debug)]
-enum PathParseError<'a> {
+pub enum PathParseError<'a> {
     InsufficientLength,
     UnexpectedToken(&'a str),
 }
 
-fn parse_key<'a>(key: &'a str) -> Result<Vec<String>, PathParseError<'a>> {
+pub fn parse_key<'a>(key: &'a str) -> Result<Vec<String>, PathParseError<'a>> {
     let mut xs = Vec::new();
 
     let parts = key.split("/");
@@ -132,7 +78,7 @@ fn parse_key<'a>(key: &'a str) -> Result<Vec<String>, PathParseError<'a>> {
             }
             "*" => {
                 if !buf.is_empty() {
-                    xs.push(p.to_string());
+                    xs.push(buf.clone());
                     buf.clear();
                 }
                 xs.push(p.to_string());
@@ -152,117 +98,120 @@ fn parse_key<'a>(key: &'a str) -> Result<Vec<String>, PathParseError<'a>> {
     Ok(xs)
 }
 
-fn longest_subseq<'a>(lhs: &'a str, rhs: &'a str) -> &'a str {
-    let min = std::cmp::min(lhs.len(), rhs.len());
+#[test]
+fn test_parse() {
+    let p = "/api/hello/:name/:age/*";
+    println!("{:?}", parse_key(p));
 
-    if min == 0 {
-        return "";
-    }
+    let p = "/api/hello/*";
+    println!("{:?}", parse_key(p));
 
-    for i in 0..min {
-        if &lhs[i..i + 1] != &rhs[i..i + 1] {
-            return &lhs[..i];
-        }
-    }
+    let p = "/api/hello/*/err";
+    println!("{:?}", parse_key(p));
 
-    return &lhs[..min];
+    let p = "/query/*";
+    println!("{:?}", parse_key(p));
 }
 
-fn compare_keys<'a, 'b>(params: &mut Params<'a, 'b>, a: &'a [String], b: &'b str) -> usize {
-    let mut i = 0;
-
-    for el in a {
-        if &b[i..i + 1] == "/" {
-            i = i + 1;
-        }
-
-        if i >= b.len() {
-            return i;
-        }
-
-        match &el[0..1] {
-            "*" => {
-                return b.len();
-            }
-            ":" => {
-                let r = find_substr(&b[i..], '/');
-                if r == 0 {
-                    params.insert(&el[1..], &b[i..b.len()]);
-                    return b.len();
-                }
-                params.insert(&el[1..], &b[i..i + r]);
-            }
-            _ => {
-                if (&b[i..]).starts_with(el) {
-                    i = i + el.len();
-                } else {
-                    return i;
-                }
-            }
-        }
-    }
-
-    return i;
-}
-
-fn find_substr(a: &str, ch: char) -> usize {
-    for (i, c) in a.char_indices() {
-        if ch == c {
-            return i;
-        }
-    }
-    return 0;
-}
-
-// #[test]
-// fn test_subseq() {
-//     let a = "/a/b/c/";
-//     let b = "/a/b/d/";
-//
-//     let subseq = longest_subseq(a, b);
-//     assert_eq!(subseq, "/a/b/");
-// }
-//
-// #[test]
-// fn test_parse() {
-//     let p = "/api/hello/:name/:age/*";
-//     println!("{:?}", parse_key(p));
-//
-//     let p = "/api/hello/*";
-//     println!("{:?}", parse_key(p));
-//
-//     let p = "/api/hello/*/err";
-//     println!("{:?}", parse_key(p));
-// }
-//
 #[test]
 fn test_node() {
     let mut node = Node::new(Vec::new());
     node.insert("/api/hello/:name", 1);
     node.insert("/api/hello/:name/:age", 2);
-    // println!("{:#?}", node);
+    node.insert("/api/goodbye/:name/:age", 3);
+    node.insert("/a/b", 4);
 
-    let s = "/api/hello/:name/";
-    let key = parse_key(s).unwrap();
+    let res = Node {
+        path: vec!["a".to_string()],
+        data: None,
+        children: vec![
+            Node {
+                path: vec!["pi/".to_string()],
+                data: None,
+                children: vec![
+                    Node {
+                        path: vec!["hello/".to_string(), ":name".to_string()],
+                        data: Some(1),
+                        children: vec![Node {
+                            path: vec![":age".to_string()],
+                            data: Some(3),
+                            children: vec![],
+                        }],
+                    },
+                    Node {
+                        path: vec![
+                            "goodbye/".to_string(),
+                            ":name".to_string(),
+                            ":age".to_string(),
+                        ],
+                        data: Some(2),
+                        children: vec![],
+                    },
+                ],
+            },
+            Node {
+                path: vec!["/b".to_string(), "*".to_string()],
+                data: Some(4),
+                children: vec![],
+            },
+        ],
+    };
 
-    let t = "/api/hello/world/";
+    assert_eq!(node, res);
+}
 
-    let mut params = Params::new();
-    let len = compare_keys(&mut params, &key, t);
+#[test]
+fn test_node_get() {
+    let trie = Node {
+        path: vec!["a".to_string()],
+        data: None,
+        children: vec![
+            Node {
+                path: vec!["pi/".to_string()],
+                data: None,
+                children: vec![
+                    Node {
+                        path: vec!["hello/".to_string(), ":name".to_string()],
+                        data: Some(1),
+                        children: vec![Node {
+                            path: vec![":age".to_string()],
+                            data: Some(3),
+                            children: vec![],
+                        }],
+                    },
+                    Node {
+                        path: vec![
+                            "goodbye/".to_string(),
+                            ":name".to_string(),
+                            ":age".to_string(),
+                        ],
+                        data: Some(2),
+                        children: vec![],
+                    },
+                ],
+            },
+            Node {
+                path: vec!["/b".to_string(), "*".to_string()],
+                data: Some(4),
+                children: vec![],
+            },
+        ],
+    };
 
-    println!("len {}, {}", len, &t[..len]);
-    println!("params {:?}", params);
+    let (r, params) = trie.get("/api/hello/world").unwrap();
+    assert_eq!(*r, 1);
+    assert_eq!(params.get("name"), Some("world"));
 
-    // test 2
+    let (r, params) = trie.get("/api/goodbye/world/2").unwrap();
+    assert_eq!(*r, 2);
+    assert_eq!(params.get("name"), Some("world"));
+    assert_eq!(params.get("age"), Some("2"));
 
-    let s = "/api/hello/*";
-    let key = parse_key(s).unwrap();
+    let (r, params) = trie.get("/api/hello/world/2").unwrap();
+    assert_eq!(*r, 3);
+    assert_eq!(params.get("name"), Some("world"));
+    assert_eq!(params.get("age"), Some("2"));
 
-    let t = "/api/hello/world/";
-
-    let mut params = Params::new();
-    let len = compare_keys(&mut params, &key, t);
-
-    println!("len {}, {}", len, &t[..len]);
-    println!("params {:?}", params);
+    let (r, params) = trie.get("/a/b/string").unwrap();
+    assert_eq!(*r, 4);
 }

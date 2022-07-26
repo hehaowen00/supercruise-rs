@@ -1,4 +1,4 @@
-pub(crate) mod node;
+pub mod node;
 pub mod params;
 #[cfg(test)]
 mod test;
