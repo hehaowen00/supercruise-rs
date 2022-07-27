@@ -15,6 +15,16 @@ fn main() {
     let keys = parse_key("/api/hello/:name/:age").unwrap();
     node.insert(&keys, 3);
 
+    let keys = parse_key("/api/hello/:name/:age").unwrap();
+    node.insert(&keys, 6);
+
+    let keys = parse_key("/api/hello").unwrap();
+    node.insert(&keys, 0);
+
+    let keys = parse_key("/:id/collections").unwrap();
+    println!("{:?}", keys);
+    node.insert(&keys, 8);
+
     println!("{:#?}", node);
 
     let res = node.get("/api/hello/world");
