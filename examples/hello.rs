@@ -36,24 +36,27 @@ impl Route<Ws> for Hello {
     }
 }
 
-async fn index(_req: Request<Body>) -> std::io::Result<Response<Body>> {
+async fn index<'a, 'b>(_req: Request<Body>) -> std::io::Result<Response<Body>> {
     let mut f = tokio::fs::File::open("client.html").await?;
     let mut buf = Vec::new();
     f.read_to_end(&mut buf).await?;
 
     let resp: Response<Body> = Response::builder()
         .status(StatusCode::OK)
-        .header("Content-Type", "text/plain")
+        .header("Content-Type", "text/html")
         .header("Connection", "close")
-        .body(String::from("Hello World!").into())
+        .body(buf.into())
         .unwrap();
 
     Ok(resp)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let router = Router::new().get("/", index).ws("/ws", Hello {});
+fn main() {
+    env_logger::init();
+    let router = Router::builder()
+        .get("/", index)
+        .ws("/ws", Hello {})
+        .finalize();
 
-    supercruise_rs::serve(router).await
+    supercruise_rs::start_server("0.0.0.0:8080", router);
 }

@@ -15,7 +15,7 @@ pub struct WsUpgrader;
 impl WsUpgrader {
     const WS_KEY: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    pub async fn upgrade(stream: &mut TcpStream, req: Request<Body>) -> std::io::Result<()> {
+    pub async fn upgrade(stream: &mut TcpStream, req: &Request<Body>) -> std::io::Result<()> {
         let headers = req.headers();
         if !headers.contains_key(CONNECTION) || !headers.contains_key(SEC_WEBSOCKET_KEY) {
             return Err(std::io::Error::other("upgrade failed"));

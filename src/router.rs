@@ -1,38 +1,91 @@
 use crate::codec::websocket::Ws;
 use crate::context::Body;
-use crate::route::{Endpoint, HttpEndpoint, WsEndpoint};
 use crate::route::{HttpRoute, Route};
 use async_trait::async_trait;
 use http::{Method, Request, Response};
 use std::sync::Arc;
-use trie_rs::radix::RadixNode;
-use trie_rs::TrieExt;
+use trie_rs::path::node::{PathTrie, TrieBuilder};
+use trie_rs::path::params::Params;
 
+#[derive(Debug)]
 pub struct Router {
-    get_routes: RadixNode<String, Arc<EndpointR>>,
-    post_routes: RadixNode<String, Arc<EndpointR>>,
-    put_routes: RadixNode<String, Arc<EndpointR>>,
-    delete_routes: RadixNode<String, Arc<EndpointR>>,
-    ws: Option<Arc<EndpointR>>,
-    not_found: Option<Arc<EndpointR>>,
+    get_routes: PathTrie<Arc<Endpoint>>,
+    post_routes: PathTrie<Arc<Endpoint>>,
+    put_routes: PathTrie<Arc<Endpoint>>,
+    delete_routes: PathTrie<Arc<Endpoint>>,
+    ws: PathTrie<Arc<Endpoint>>,
+    not_found: Arc<Endpoint>,
 }
 
-pub(crate) enum EndpointR {
+pub(crate) enum Endpoint {
     Http(Box<dyn HttpRoute + Send + Sync>),
     Ws(Box<dyn Route<Ws> + Send + Sync>),
 }
 
-impl Router {
-    pub fn new() -> Self {
-        let e = NotFound {};
+impl std::fmt::Debug for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Http(_) => write!(f, "http()"),
+            Self::Ws(_) => write!(f, "ws()"),
+        }
+    }
+}
 
+impl Router {
+    pub fn builder() -> RouterBuilder {
+        RouterBuilder::new()
+    }
+
+    #[inline]
+    pub(crate) fn route<'a, 'b>(
+        &'a self,
+        method: &Method,
+        path: &'b str,
+    ) -> (Arc<Endpoint>, Params<'a, 'b>) {
+        // if path == "/ws" {
+        //     return self.ws.clone().unwrap();
+        // }
+
+        match method {
+            &Method::GET => match self.get_routes.get(path) {
+                Some((r, params)) => (r.clone(), params),
+                None => (self.not_found.clone(), Params::new()),
+            },
+            &Method::POST => match self.post_routes.get(path) {
+                Some((r, params)) => (r.clone(), params),
+                None => (self.not_found.clone(), Params::new()),
+            },
+            &Method::PUT => match self.put_routes.get(path) {
+                Some((r, params)) => (r.clone(), params),
+                None => (self.not_found.clone(), Params::new()),
+            },
+            &Method::DELETE => match self.delete_routes.get(path) {
+                Some((r, params)) => (r.clone(), params),
+                None => (self.not_found.clone(), Params::new()),
+            },
+            _ => (self.not_found.clone(), Params::new()),
+        }
+    }
+}
+
+pub struct RouterBuilder {
+    get_routes: TrieBuilder<Arc<Endpoint>>,
+    post_routes: TrieBuilder<Arc<Endpoint>>,
+    put_routes: TrieBuilder<Arc<Endpoint>>,
+    delete_routes: TrieBuilder<Arc<Endpoint>>,
+    ws: TrieBuilder<Arc<Endpoint>>,
+    not_found: Option<Arc<Endpoint>>,
+}
+
+impl RouterBuilder {
+    pub fn new() -> Self {
         Self {
-            ws: None,
-            get_routes: RadixNode::new(),
-            post_routes: RadixNode::new(),
-            put_routes: RadixNode::new(),
-            delete_routes: RadixNode::new(),
-            not_found: Some(Arc::new(EndpointR::Http(Box::new(e)))),
+            get_routes: TrieBuilder::new(),
+            post_routes: TrieBuilder::new(),
+            put_routes: TrieBuilder::new(),
+            delete_routes: TrieBuilder::new(),
+            ws: TrieBuilder::new(),
+            not_found: Some(Arc::new(Endpoint::Http(Box::new(NotFound {})))),
         }
     }
 
@@ -40,16 +93,8 @@ impl Router {
     where
         R: HttpRoute + Send + Sync + 'static,
     {
-        let route: Arc<EndpointR> = Arc::new(EndpointR::Http(Box::new(route)));
-        let xs: Vec<_> = if path == "/" {
-            vec![path.to_string()]
-        } else {
-            path.split("/")
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect()
-        };
-        self.get_routes.insert(&xs, route).unwrap();
+        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
+        self.get_routes.insert(path, route);
         self
     }
 
@@ -57,17 +102,8 @@ impl Router {
     where
         R: HttpRoute + Send + Sync + 'static,
     {
-        let route: Arc<EndpointR> = Arc::new(EndpointR::Http(Box::new(route)));
-        let xs: Vec<_> = if path == "/" {
-            vec![path.to_string()]
-        } else {
-            path.split("/")
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect()
-        };
-
-        self.post_routes.insert(&xs, route).unwrap();
+        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
+        self.post_routes.insert(path, route);
         self
     }
 
@@ -75,8 +111,8 @@ impl Router {
     where
         R: HttpRoute + Send + Sync + 'static,
     {
-        let route: Arc<Box<dyn Endpoint>> = Arc::new(Box::new(HttpEndpoint::new(route)));
-
+        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
+        self.put_routes.insert(path, route);
         self
     }
 
@@ -84,7 +120,8 @@ impl Router {
     where
         R: HttpRoute + Send + Sync + 'static,
     {
-        let route: Arc<Box<dyn Endpoint>> = Arc::new(Box::new(HttpEndpoint::new(route)));
+        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
+        self.delete_routes.insert(path, route);
         self
     }
 
@@ -92,9 +129,8 @@ impl Router {
     where
         R: Route<Ws> + Send + Sync + 'static,
     {
-        let route: Arc<EndpointR> = Arc::new(EndpointR::Ws(Box::new(route)));
-
-        self.ws = Some(route);
+        let route: Arc<Endpoint> = Arc::new(Endpoint::Ws(Box::new(route)));
+        self.ws.insert(path, route);
         self
     }
 
@@ -102,31 +138,14 @@ impl Router {
         self
     }
 
-    #[inline]
-    pub(crate) async fn route(&self, method: &Method, path: &str) -> Option<Arc<EndpointR>> {
-        let xs: Vec<_> = if path == "/" {
-            vec![path.to_string()]
-        } else {
-            path.split("/")
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect()
-        };
-
-        if path == "/ws" {
-            return self.ws.clone();
-        }
-
-        match method {
-            &Method::GET => match self.get_routes.get(&xs) {
-                Some(r) => Some(r.clone()),
-                _ => self.not_found.clone(),
-            },
-            &Method::POST => match self.post_routes.get(&xs) {
-                Some(r) => Some(r.clone()),
-                _ => self.not_found.clone(),
-            },
-            _ => self.not_found.clone(),
+    pub fn finalize(mut self) -> Router {
+        Router {
+            get_routes: self.get_routes.finalize(),
+            post_routes: self.post_routes.finalize(),
+            put_routes: self.put_routes.finalize(),
+            delete_routes: self.delete_routes.finalize(),
+            ws: self.ws.finalize(),
+            not_found: self.not_found.unwrap(),
         }
     }
 }
@@ -135,13 +154,17 @@ struct NotFound;
 
 #[async_trait]
 impl HttpRoute for NotFound {
-    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
+    async fn handle<'a, 'b>(
+        &self,
+        req: &Request<Body>,
+        params: Params<'a, 'b>,
+    ) -> std::io::Result<Response<Body>> {
         let resp: Response<Body> = Response::builder()
             .header("Content-Type", "text/html")
             .body(String::from("404 Not Found").into())
             .unwrap();
 
-        println!("404 Not Found {}", req.uri().path());
+        log::error!("404 Not Found {}", req.uri().path());
 
         Ok(resp)
     }

@@ -1,13 +1,13 @@
 use crate::codec::http::*;
 use crate::codec::websocket::*;
-use crate::context::Body;
-use crate::context::Context;
+use crate::context::{Body, Context};
 use crate::ws::WsUpgrader;
 
 use async_trait::async_trait;
 use http::{Request, Response};
 use std::future::Future;
 use tokio::net::TcpStream;
+use trie_rs::path::params::Params;
 
 #[async_trait]
 pub trait ServiceFactory: Send + Sync {
@@ -25,12 +25,20 @@ pub trait Endpoint: Send + Sync {
 
 #[async_trait]
 pub trait Route<Codec> {
-    async fn handle(&self, ctx: &mut Context<Codec>) -> std::io::Result<()>;
+    async fn handle<'a, 'b>(
+        &self,
+        ctx: &mut Context<Codec>,
+        params: Params<'a, 'b>,
+    ) -> std::io::Result<()>;
 }
 
 #[async_trait]
 pub trait HttpRoute: Send + Sync {
-    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>>;
+    async fn handle<'a, 'b>(
+        &self,
+        req: &Request<Body>,
+        params: Params<'a, 'b>,
+    ) -> std::io::Result<Response<Body>>;
 }
 
 #[async_trait]
@@ -39,7 +47,11 @@ where
     F: Fn(Request<Body>) -> R + Send + Sync,
     R: Future<Output = std::io::Result<Response<Body>>> + Send,
 {
-    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
+    async fn handle<'a, 'b>(
+        &self,
+        req: Request<Body>,
+        params: Params<'a, 'b>,
+    ) -> std::io::Result<Response<Body>> {
         self(req).await
     }
 }
@@ -50,7 +62,11 @@ where
     F: Fn(&mut Context<Http<Body>>) -> R + Send + Sync,
     R: Future<Output = std::io::Result<()>> + Send,
 {
-    async fn handle(&self, ctx: &mut Context<Http<Body>>) -> std::io::Result<()> {
+    async fn handle<'a, 'b>(
+        &self,
+        ctx: &mut Context<Http<Body>>,
+        params: Params<'a, 'b>,
+    ) -> std::io::Result<()> {
         self(ctx).await
     }
 }
@@ -70,21 +86,21 @@ impl HttpEndpoint {
     }
 }
 
-#[async_trait]
-impl Endpoint for HttpEndpoint {
-    async fn handle(
-        &self,
-        mut stream: TcpStream,
-        req: Request<Body>,
-    ) -> std::io::Result<Option<TcpStream>> {
-        let mut context: Context<Http<_>> = Context::from(&mut stream);
-
-        let resp = self.handler.handle(req).await?;
-        context.send(resp).await?;
-
-        Ok(None)
-    }
-}
+// #[async_trait]
+// impl Endpoint for HttpEndpoint {
+//     async fn handle(
+//         &self,
+//         mut stream: TcpStream,
+//         req: Request<Body>,
+//     ) -> std::io::Result<Option<TcpStream>> {
+//         let mut context: Context<Http<_>> = Context::from(&mut stream);
+//
+//         let resp = self.handler.handle(req, params).await?;
+//         context.send(resp).await?;
+//
+//         Ok(None)
+//     }
+// }
 
 pub struct WsEndpoint {
     handler: Box<dyn Route<Ws> + Send + Sync>,
@@ -98,23 +114,23 @@ impl WsEndpoint {
     }
 }
 
-#[async_trait]
-impl Endpoint for WsEndpoint {
-    async fn handle(
-        &self,
-        mut stream: TcpStream,
-        req: Request<Body>,
-    ) -> std::io::Result<Option<TcpStream>> {
-        WsUpgrader::upgrade(&mut stream, req).await?;
-
-        let mut context = Context::<Ws>::from(&mut stream);
-
-        self.handler.handle(&mut context).await?;
-
-        let close = WsFrame::builder().close();
-
-        context.send(close).await?;
-
-        Ok(None)
-    }
-}
+// #[async_trait]
+// impl Endpoint for WsEndpoint {
+//     async fn handle(
+//         &self,
+//         mut stream: TcpStream,
+//         req: Request<Body>,
+//     ) -> std::io::Result<Option<TcpStream>> {
+//         WsUpgrader::upgrade(&mut stream, req).await?;
+//
+//         let mut context = Context::<Ws>::from(&mut stream);
+//
+//         self.handler.handle(&mut context, params).await?;
+//
+//         let close = WsFrame::builder().close();
+//
+//         context.send(close).await?;
+//
+//         Ok(None)
+//     }
+// }
