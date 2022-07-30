@@ -1,5 +1,4 @@
 // #![allow(unused)]
-#![feature(core_ffi_c)]
 #![feature(io_error_other)]
 
 pub mod codec;

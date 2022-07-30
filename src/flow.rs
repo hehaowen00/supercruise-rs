@@ -33,20 +33,25 @@ pub(crate) async fn process(router: Arc<Router>, mut stream: TcpStream) -> std::
             }
         };
 
-        let (r, params) = router.route(req.method(), req.uri().path());
+        let (r, params) = router.route(&req);
 
+        let mut close = false;
+        if let Some(v) = req.headers().get("Connection") {
+            if v == "close" {
+                close = true;
+            }
+        }
         match &*r {
             Endpoint::Http(r) => {
                 let mut context: Context<Http<_>> = Context::from(&mut stream);
-                let resp = r.handle(&req, params).await?;
-
+                let resp = r.handle(req).await?;
                 context.send(resp).await?;
             }
             Endpoint::Ws(r) => {
                 WsUpgrader::upgrade(&mut stream, &req).await?;
 
                 let mut context = Context::<Ws>::from(&mut stream);
-                r.handle(&mut context, params).await?;
+                r.handle(&mut context).await?;
 
                 let close = WsFrame::builder().close();
                 context.send(close).await?;
@@ -54,6 +59,11 @@ pub(crate) async fn process(router: Arc<Router>, mut stream: TcpStream) -> std::
                 break;
             }
         }
+
+        if close {
+            break;
+        }
+        // break;
     }
 
     Ok(())

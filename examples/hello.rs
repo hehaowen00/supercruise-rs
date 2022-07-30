@@ -36,16 +36,16 @@ impl Route<Ws> for Hello {
     }
 }
 
-async fn index<'a, 'b>(_req: Request<Body>) -> std::io::Result<Response<Body>> {
-    let mut f = tokio::fs::File::open("client.html").await?;
-    let mut buf = Vec::new();
-    f.read_to_end(&mut buf).await?;
+async fn index(_req: Request<Body>) -> std::io::Result<Response<Body>> {
+    // let mut f = tokio::fs::File::open("client.html").await?;
+    // let mut buf = Vec::new();
+    // f.read_to_end(&mut buf).await?;
 
     let resp: Response<Body> = Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/html")
-        .header("Connection", "close")
-        .body(buf.into())
+        .header("Connection", "keep-alive")
+        .body("Hello, World!".into())
         .unwrap();
 
     Ok(resp)

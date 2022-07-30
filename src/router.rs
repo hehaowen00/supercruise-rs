@@ -39,13 +39,20 @@ impl Router {
     #[inline]
     pub(crate) fn route<'a, 'b>(
         &'a self,
-        method: &Method,
-        path: &'b str,
+        req: &'b Request<Body>,
     ) -> (Arc<Endpoint>, Params<'a, 'b>) {
-        // if path == "/ws" {
-        //     return self.ws.clone().unwrap();
-        // }
+        let path = req.uri().path();
+        let method = req.method();
 
+        // if let Some(value) = req.headers().get("Upgrade") {
+        //     if value == "websocket" {
+        //         return match self.ws.get(path) {
+        //             Some((r, params)) => (r.clone(), params),
+        //             None => (self.not_found.clone(), Params::new()),
+        //         };
+        //     }
+        // }
+        //
         match method {
             &Method::GET => match self.get_routes.get(path) {
                 Some((r, params)) => (r.clone(), params),
@@ -134,11 +141,16 @@ impl RouterBuilder {
         self
     }
 
-    pub fn not_found(mut self) -> Self {
+    pub fn not_found<R>(mut self, route: R) -> Self
+    where
+        R: HttpRoute + Send + Sync + 'static,
+    {
+        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
+        self.not_found = Some(route);
         self
     }
 
-    pub fn finalize(mut self) -> Router {
+    pub fn finalize(self) -> Router {
         Router {
             get_routes: self.get_routes.finalize(),
             post_routes: self.post_routes.finalize(),
@@ -154,12 +166,9 @@ struct NotFound;
 
 #[async_trait]
 impl HttpRoute for NotFound {
-    async fn handle<'a, 'b>(
-        &self,
-        req: &Request<Body>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<Response<Body>> {
+    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
         let resp: Response<Body> = Response::builder()
+            .status(404)
             .header("Content-Type", "text/html")
             .body(String::from("404 Not Found").into())
             .unwrap();

@@ -25,20 +25,12 @@ pub trait Endpoint: Send + Sync {
 
 #[async_trait]
 pub trait Route<Codec> {
-    async fn handle<'a, 'b>(
-        &self,
-        ctx: &mut Context<Codec>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<()>;
+    async fn handle(&self, ctx: &mut Context<Codec>) -> std::io::Result<()>;
 }
 
 #[async_trait]
 pub trait HttpRoute: Send + Sync {
-    async fn handle<'a, 'b>(
-        &self,
-        req: &Request<Body>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<Response<Body>>;
+    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>>;
 }
 
 #[async_trait]
@@ -47,11 +39,7 @@ where
     F: Fn(Request<Body>) -> R + Send + Sync,
     R: Future<Output = std::io::Result<Response<Body>>> + Send,
 {
-    async fn handle<'a, 'b>(
-        &self,
-        req: Request<Body>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<Response<Body>> {
+    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
         self(req).await
     }
 }
@@ -62,10 +50,10 @@ where
     F: Fn(&mut Context<Http<Body>>) -> R + Send + Sync,
     R: Future<Output = std::io::Result<()>> + Send,
 {
-    async fn handle<'a, 'b>(
+    async fn handle(
         &self,
         ctx: &mut Context<Http<Body>>,
-        params: Params<'a, 'b>,
+        // params: Params<'a, 'b>,
     ) -> std::io::Result<()> {
         self(ctx).await
     }

@@ -18,11 +18,7 @@ impl Dir {
 
 #[async_trait]
 impl HttpRoute for Dir {
-    async fn handle<'a, 'b>(
-        &self,
-        req: &Request<Body>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<Response<Body>> {
+    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
         let resp = Response::builder()
             .status(StatusCode::OK)
             .body(String::from("ok").into())
@@ -46,11 +42,7 @@ impl File {
 
 #[async_trait]
 impl Route<Http<Body>> for File {
-    async fn handle<'a, 'b>(
-        &self,
-        ctx: &mut Context<Http<Body>>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<()> {
+    async fn handle(&self, ctx: &mut Context<Http<Body>>) -> std::io::Result<()> {
         let mut f = tokio::fs::File::open(&self.path).await.unwrap();
         let mut buf = Vec::new();
         f.read_to_end(&mut buf).await?;
@@ -84,11 +76,7 @@ impl Redirect {
 
 #[async_trait]
 impl Route<Http<Body>> for Redirect {
-    async fn handle<'a, 'b>(
-        &self,
-        ctx: &mut Context<Http<Body>>,
-        params: Params<'a, 'b>,
-    ) -> std::io::Result<()> {
+    async fn handle(&self, ctx: &mut Context<Http<Body>>) -> std::io::Result<()> {
         Ok(())
     }
 }
