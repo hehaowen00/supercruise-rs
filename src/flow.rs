@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 
-pub(crate) async fn process(router: Arc<Router>, mut stream: TcpStream) -> std::io::Result<()> {
+pub(crate) async fn process(router: Arc<Router>, stream: &mut TcpStream) -> std::io::Result<()> {
     let mut bytes = BytesMut::new();
     stream.set_nodelay(true).unwrap();
 
@@ -36,25 +36,30 @@ pub(crate) async fn process(router: Arc<Router>, mut stream: TcpStream) -> std::
         let (r, params) = router.route(&req);
 
         let mut close = false;
+
         if let Some(v) = req.headers().get("Connection") {
             if v == "close" {
                 close = true;
             }
         }
+
         match &*r {
             Endpoint::Http(r) => {
-                let mut context: Context<Http<_>> = Context::from(&mut stream);
+                log::debug!("http endpoint");
+                let mut context: Context<Http<_>> = Context::from(stream);
                 let resp = r.handle(req).await?;
                 context.send(resp).await?;
             }
             Endpoint::Ws(r) => {
-                WsUpgrader::upgrade(&mut stream, &req).await?;
+                log::debug!("websocket endpoint");
+                WsUpgrader::upgrade(stream, &req).await?;
+                let mut context = Context::<Ws>::from(stream);
 
-                let mut context = Context::<Ws>::from(&mut stream);
-                r.handle(&mut context).await?;
+                let (mut tx, mut rx) = context.split();
+                r.handle(&mut tx, &mut rx).await?;
 
                 let close = WsFrame::builder().close();
-                context.send(close).await?;
+                tx.write(close).await?;
 
                 break;
             }
@@ -63,7 +68,6 @@ pub(crate) async fn process(router: Arc<Router>, mut stream: TcpStream) -> std::
         if close {
             break;
         }
-        // break;
     }
 
     Ok(())

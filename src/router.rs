@@ -44,15 +44,15 @@ impl Router {
         let path = req.uri().path();
         let method = req.method();
 
-        // if let Some(value) = req.headers().get("Upgrade") {
-        //     if value == "websocket" {
-        //         return match self.ws.get(path) {
-        //             Some((r, params)) => (r.clone(), params),
-        //             None => (self.not_found.clone(), Params::new()),
-        //         };
-        //     }
-        // }
-        //
+        if let Some(value) = req.headers().get("Upgrade") {
+            if value == "websocket" {
+                return match self.ws.get(path) {
+                    Some((r, params)) => (r.clone(), params),
+                    None => (self.not_found.clone(), Params::new()),
+                };
+            }
+        }
+
         match method {
             &Method::GET => match self.get_routes.get(path) {
                 Some((r, params)) => (r.clone(), params),

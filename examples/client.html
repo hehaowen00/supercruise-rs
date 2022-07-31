@@ -5,41 +5,56 @@
   <title>WebSocket client</title>
 </head>
 <body>
+  <input type="text" id="username" placeholder="username" />
+  <input type="text" id="message" placeholder="message" />
+  <button onclick="sendMessage()">send</button>
+
   <div id="result"></div>
   <script language="JavaScript">
-    function log(data) {
-      let timestamp = '[' + new Date().toLocaleString() + '] ';
-      let message = timestamp + data;
-      console.log(message);
+    let client = new WebSocket("ws://localhost:8080/chat");
+
+    function sendMessage() {
+      let username = document.querySelector("#username").value;
+      let message = document.querySelector("#message").value;
+      let timestamp = new Date().toLocaleString();
+
+      client.send(JSON.stringify({ timestamp, username, message }));
+      displayMessage({ timestamp, username, message });
+    }
+
+    function displayMessage(data) {
+      let timestamp = '[' + data.timestamp + '] ';
+      let p = document.createElement("p");
+      p.innerText = `${timestamp} ${username} says: ${message}`;
 
       let result = document.getElementById('result');
-      let p = document.createElement("p");
-      p.innerText = message;
       result.appendChild(p);
     }
 
-    let client = new WebSocket("ws://localhost:8080/ws");
-    client.onopen = function(evt) {
-      log('connected');
+    function logEvent(message) {
+      let timestamp = '[' + new Date().toLocaleString() + '] ';
+      let p = document.createElement("p");
+      p.innerText = `${timestamp} ${message}`;
 
-      let message = "hello!";
-      client.send(message);
-      log("sent: " + message);
+      let result = document.getElementById('result');
+      result.appendChild(p);
+    }
+
+    client.onopen = function(evt) {
+      logEvent('connected');
     };
 
     client.onclose = function(evt) {
-      console.log(evt)
-      log('disconnected');
+      logEvent('disconnected');
     };
 
     client.onmessage = function(evt) {
-      console.log(evt)
-      log("received '" + evt.data + "'");
+      let data = JSON.parse(evt.data);
+      displayMessage({ timestamp, username, message });
     };
 
     client.onerror = function(evt) {
-      console.log(evt)
-      log("error: " + evt.data);
+      logEvent("error: ", evt);
     };
   </script>
 </body>

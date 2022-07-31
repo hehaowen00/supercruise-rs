@@ -12,7 +12,7 @@ const FRAME_LIMIT: usize = 65535;
 #[derive(Debug)]
 pub struct WsFrame {
     opcode: Opcode,
-    masked: bool,
+    pub masked: bool,
     data: BytesMut,
 }
 
@@ -304,7 +304,7 @@ fn mask_length(dest: &mut BytesMut, mask_bit: u8, length: usize) {
         x if x <= 65535 => {
             let len = x as u16;
 
-            println!("126 | len {}", len);
+            log::debug!("126 | len {}", len);
 
             dest.put_u8(mask_bit | 126);
             dest.extend_from_slice(&len.to_be_bytes());
@@ -312,7 +312,7 @@ fn mask_length(dest: &mut BytesMut, mask_bit: u8, length: usize) {
         x => {
             let len = x;
 
-            println!("127 | len {}", len);
+            log::debug!("127 | len {}", len);
 
             dest.put_u8(mask_bit | 127);
             dest.extend_from_slice(&len.to_be_bytes());

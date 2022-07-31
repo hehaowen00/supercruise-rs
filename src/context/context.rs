@@ -15,6 +15,7 @@ pub struct Context<'a, Codec> {
 
 pub struct Sender<'a, Codec> {
     writer: WriteHalf<'a>,
+    buffers: [BytesMut; 2],
     _marker: PhantomData<Codec>,
 }
 
@@ -22,8 +23,17 @@ impl<'a, Codec> Sender<'a, Codec> {
     pub fn new(writer: WriteHalf<'a>) -> Self {
         Self {
             writer,
+            buffers: [BytesMut::new(), BytesMut::new()],
             _marker: PhantomData,
         }
+    }
+
+    pub async fn write(&mut self, msg: WsFrame) -> std::io::Result<()> {
+        let mut ws = Ws::new();
+        let bytes = &mut self.buffers[1];
+        log::info!("{:?}", bytes);
+        ws.encode(msg, bytes).unwrap();
+        self.writer.write_all(bytes).await
     }
 }
 
@@ -74,11 +84,11 @@ impl<'a, Codec> Context<'a, Codec> {
 }
 
 impl<'a> Context<'a, Ws> {
-    pub fn split(stream: &'a mut TcpStream) -> (Sender<'a, Ws>, Receiver<'a, Ws>) {
-        let (reader, writer) = stream.split();
+    pub fn split(&'a mut self) -> (Sender<'a, Ws>, Receiver<'a, Ws>) {
+        let (reader, writer) = self.stream.split();
         let tx = Sender::new(writer);
         let rx = Receiver::new(reader);
-        return (tx, rx);
+        (tx, rx)
     }
 
     pub fn set_timeout(&mut self) {}
