@@ -6,7 +6,7 @@ use supercruise_rs::prelude::*;
 use supercruise_rs::route::Route;
 use tokio::sync::broadcast::{Receiver, Sender};
 
-static CLIENT_HTML: &'static str = include_str!("client.html");
+static CHAT_HTML: &'static str = include_str!("chat.html");
 
 struct Chat {
     id: AtomicUsize,
@@ -72,7 +72,7 @@ async fn index(_req: Request<Body>) -> std::io::Result<Response<Body>> {
         .status(StatusCode::OK)
         .header("Content-Type", "text/html")
         .header("Connection", "keep-alive")
-        .body(CLIENT_HTML.into())
+        .body(CHAT_HTML.into())
         .unwrap();
 
     Ok(resp)
