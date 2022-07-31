@@ -5,6 +5,7 @@ use crate::ws::WsUpgrader;
 use crate::Router;
 use bytes::BytesMut;
 use http::Request;
+use std::pin;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
@@ -16,12 +17,21 @@ pub(crate) async fn process(router: Arc<Router>, stream: &mut TcpStream) -> std:
     loop {
         let mut codec = Http::new();
 
-        stream.read_buf(&mut bytes).await?;
+        let n = stream.read_buf(&mut bytes).await?;
+
+        if n == 0 {
+            return Ok(());
+        }
 
         let mut res = codec.decode(&mut bytes);
 
         while let Ok(None) = res {
-            stream.read_buf(&mut bytes).await?;
+            let n = stream.read_buf(&mut bytes).await?;
+
+            if n == 0 {
+                return Ok(());
+            }
+
             res = codec.decode(&mut bytes);
         }
 
@@ -46,12 +56,14 @@ pub(crate) async fn process(router: Arc<Router>, stream: &mut TcpStream) -> std:
         match &*r {
             Endpoint::Http(r) => {
                 log::debug!("http endpoint");
+
                 let mut context: Context<Http<_>> = Context::from(stream);
                 let resp = r.handle(req).await?;
                 context.send(resp).await?;
             }
             Endpoint::Ws(r) => {
                 log::debug!("websocket endpoint");
+
                 WsUpgrader::upgrade(stream, &req).await?;
                 let mut context = Context::<Ws>::from(stream);
 

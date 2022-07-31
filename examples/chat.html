@@ -23,6 +23,7 @@
     }
 
     function displayMessage(data) {
+      const { username, message } = data;
       let timestamp = '[' + data.timestamp + '] ';
       let p = document.createElement("p");
       p.innerText = `${timestamp} ${username} says: ${message}`;
@@ -50,7 +51,7 @@
 
     client.onmessage = function(evt) {
       let data = JSON.parse(evt.data);
-      displayMessage({ timestamp, username, message });
+      displayMessage({ ...data });
     };
 
     client.onerror = function(evt) {

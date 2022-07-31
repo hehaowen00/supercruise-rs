@@ -1,8 +1,7 @@
-use std::sync::atomic::AtomicUsize;
-
 use async_trait::async_trait;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use supercruise_rs::prelude::*;
+use supercruise_rs::prelude::{context, *};
 use supercruise_rs::route::Route;
 use tokio::sync::broadcast::{Receiver, Sender};
 
@@ -25,17 +24,12 @@ impl Chat {
     }
 }
 
-enum Event {
-    NewMessage(WsFrame),
-    Broadcast((usize, WsFrame)),
-}
-
 #[async_trait]
 impl Route<Ws> for Chat {
     async fn handle(
         &self,
-        tx: &mut supercruise_rs::prelude::Sender<Ws>,
-        rx: &mut supercruise_rs::prelude::Receiver<Ws>,
+        tx: &mut context::Sender<Ws>,
+        rx: &mut context::Receiver<Ws>,
     ) -> std::io::Result<()> {
         let mut chat_rx = self.tx.subscribe();
         let chat_tx = self.tx.clone();
@@ -60,7 +54,7 @@ impl Route<Ws> for Chat {
                         }
                     }
                 }
-            };
+            }
         }
 
         Ok(())
@@ -86,5 +80,5 @@ fn main() {
         .ws("/chat", Chat::new())
         .finalize();
 
-    supercruise_rs::start_server("0.0.0.0:8080", router);
+    supercruise_rs::serve("0.0.0.0:8080", router);
 }

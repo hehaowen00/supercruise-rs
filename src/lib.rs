@@ -1,9 +1,6 @@
 // #![allow(unused)]
 #![feature(io_error_other)]
-use tracing::info;
-use tracing_subscriber;
 pub mod codec;
-pub mod common;
 pub mod context;
 pub mod flow;
 pub mod route;
@@ -12,25 +9,24 @@ mod ws;
 
 pub mod prelude {
     pub use super::codec::prelude::*;
-    pub use super::context::{Body, Context, Receiver, Sender};
+    pub use super::context::{self, Body, Context};
     pub use super::route::{HttpRoute, Route};
     pub use super::router::Router;
     pub use http::{Method, Request, Response, StatusCode};
 }
 
+use crate::codec::prelude::*;
+use crate::context::Context;
 pub use http::Method;
 use http::{Response, StatusCode};
 use router::Router;
-// use std::ffi::c_int;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+// use tracing::info;
+// use tracing_subscriber;
 
-// const BACKLOG: c_int = 8192;
-
-async fn serve(addr: &str, router: Arc<Router>) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = addr.parse()?;
-
+async fn worker(addr: SocketAddr, router: Arc<Router>) -> Result<(), Box<dyn std::error::Error>> {
     let socket = socket2::Socket::new(
         match addr {
             SocketAddr::V4(_) => socket2::Domain::IPV4,
@@ -58,12 +54,15 @@ async fn serve(addr: &str, router: Arc<Router>) -> Result<(), Box<dyn std::error
 
         tokio::spawn(async move {
             if let Err(e) = flow::process(r_clone, &mut socket).await {
+                if e.kind() == std::io::ErrorKind::ConnectionReset {
+                    return;
+                }
+
                 let resp = Response::builder()
                     .status(StatusCode::REQUEST_TIMEOUT)
                     .body(().into())
                     .unwrap();
-                use crate::codec::prelude::*;
-                use crate::context::Context;
+
                 let mut ctx: Context<Http<_>> = Context::from(&mut socket);
                 let _ = ctx.send(resp).await;
                 log::error!("{:?}", e);
@@ -72,22 +71,28 @@ async fn serve(addr: &str, router: Arc<Router>) -> Result<(), Box<dyn std::error
     }
 }
 
-pub fn start_server(addr: &'static str, router: Router) {
+pub fn serve(addr: &'static str, router: Router) {
+    let addr = match addr.parse() {
+        Ok(addr) => addr,
+        Err(_) => {
+            log::error!("failed to parse host address");
+            return;
+        }
+    };
     let router = Arc::new(router);
 
-    log::info!("starting server at {:?}", addr);
+    log::info!("server started on http://{:?}", addr);
 
     let mut handles = Vec::new();
 
     for _ in 0..num_cpus::get() {
         let instance = router.clone();
-
         let h = std::thread::spawn(move || {
             let res = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(serve(addr, instance));
+                .block_on(worker(addr, instance));
 
             log::error!("runtime exited: {:?}", res);
         });

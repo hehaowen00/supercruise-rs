@@ -31,7 +31,6 @@ impl<'a, Codec> Sender<'a, Codec> {
     pub async fn write(&mut self, msg: WsFrame) -> std::io::Result<()> {
         let mut ws = Ws::new();
         let bytes = &mut self.buffers[1];
-        log::info!("{:?}", bytes);
         ws.encode(msg, bytes).unwrap();
         self.writer.write_all(bytes).await
     }
