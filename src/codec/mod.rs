@@ -1,7 +1,7 @@
 mod codec;
+
 pub(crate) mod http;
 pub(crate) mod websocket;
-
 pub(crate) use codec::{Decoder, Encoder};
 
 pub(crate) mod prelude {

@@ -1,13 +1,12 @@
 use crate::codec::websocket::Ws;
 use crate::context::Body;
-use crate::route::{HttpRoute, Route};
+use crate::routing::route::{HttpRoute, Route};
 use async_trait::async_trait;
 use http::{Method, Request, Response};
 use std::sync::Arc;
 use trie_rs::path::node::{PathTrie, TrieBuilder};
 use trie_rs::path::params::Params;
 
-#[derive(Debug)]
 pub struct Router {
     get_routes: PathTrie<Arc<Endpoint>>,
     post_routes: PathTrie<Arc<Endpoint>>,
@@ -20,15 +19,6 @@ pub struct Router {
 pub(crate) enum Endpoint {
     Http(Box<dyn HttpRoute + Send + Sync>),
     Ws(Box<dyn Route<Ws> + Send + Sync>),
-}
-
-impl std::fmt::Debug for Endpoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Http(_) => write!(f, "http()"),
-            Self::Ws(_) => write!(f, "ws()"),
-        }
-    }
 }
 
 impl Router {
@@ -166,7 +156,11 @@ struct NotFound;
 
 #[async_trait]
 impl HttpRoute for NotFound {
-    async fn handle(&self, req: Request<Body>) -> std::io::Result<Response<Body>> {
+    async fn handle(
+        &self,
+        req: &Request<Body>,
+        _params: &Params,
+    ) -> std::io::Result<Response<Body>> {
         let resp: Response<Body> = Response::builder()
             .status(404)
             .header("Content-Type", "text/html")

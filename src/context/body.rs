@@ -28,7 +28,6 @@ impl Body {
         match &self.kind {
             Kind::None => return,
             Kind::Bytes(xs) => dest.extend(xs.iter()),
-            _ => return,
         }
     }
 
@@ -36,7 +35,6 @@ impl Body {
         match &self.kind {
             Kind::None => 0,
             Kind::Bytes(xs) => xs.len(),
-            _ => unreachable!(),
         }
     }
 
@@ -47,7 +45,6 @@ impl Body {
                 dest.extend_from_slice(&xs);
                 xs.len()
             }
-            _ => unreachable!(),
         }
     }
 }

@@ -1,7 +1,4 @@
 use crate::codec::prelude::*;
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
-
 use crate::context::Body;
 use base64::encode;
 use bytes::BytesMut;
@@ -9,6 +6,8 @@ use http::header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE}
 use http::{Request, Response, StatusCode};
 use sha::sha1::Sha1;
 use sha::utils::{Digest, DigestExt};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
 
 pub struct WsUpgrader;
 

@@ -7,7 +7,7 @@ use std::io::Cursor;
 
 const FIN: u8 = 0x80;
 const MASK: u8 = 0x80;
-const FRAME_LIMIT: usize = 65535;
+// const FRAME_LIMIT: usize = 65535;
 
 #[derive(Debug)]
 pub struct WsFrame {
@@ -67,29 +67,31 @@ impl WsFrameBuilder {
     }
 
     pub fn continuation(self, fragment: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::CONTINUATION, fragment.into())
+        Self::body(Opcode::CONTINUATION, Some(fragment.into()))
     }
 
     pub fn binary(self, fragment: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::BINARY, fragment.into())
+        Self::body(Opcode::BINARY, Some(fragment.into()))
     }
 
     pub fn text(self, fragment: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::TEXT, fragment.into())
+        Self::body(Opcode::TEXT, Some(fragment.into()))
     }
 
-    pub fn ping(self, data: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::PING, data.into())
+    pub fn ping(self) -> WsFrame {
+        Self::body(Opcode::PING, None)
     }
 
-    pub fn pong(self, data: impl Into<Body>) -> WsFrame {
-        Self::body(Opcode::PONG, data.into())
+    pub fn pong(self) -> WsFrame {
+        Self::body(Opcode::PONG, None)
     }
 
-    fn body(opcode: Opcode, body: Body) -> WsFrame {
+    fn body(opcode: Opcode, body: Option<Body>) -> WsFrame {
         let mut data = BytesMut::new();
 
-        body.as_bytes(&mut data);
+        if let Some(xs) = body {
+            xs.as_bytes(&mut data);
+        }
 
         WsFrame {
             opcode,

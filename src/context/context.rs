@@ -1,7 +1,7 @@
 use crate::codec::prelude::*;
 use crate::context::Body;
 use bytes::BytesMut;
-use http::{Request, Response};
+use http::Response;
 use std::marker::PhantomData;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{ReadHalf, WriteHalf};
@@ -11,65 +11,6 @@ pub struct Context<'a, Codec> {
     stream: &'a mut TcpStream,
     buffers: [BytesMut; 2],
     _marker: PhantomData<Codec>,
-}
-
-pub struct Sender<'a, Codec> {
-    writer: WriteHalf<'a>,
-    buffers: [BytesMut; 2],
-    _marker: PhantomData<Codec>,
-}
-
-impl<'a, Codec> Sender<'a, Codec> {
-    pub fn new(writer: WriteHalf<'a>) -> Self {
-        Self {
-            writer,
-            buffers: [BytesMut::new(), BytesMut::new()],
-            _marker: PhantomData,
-        }
-    }
-
-    pub async fn write(&mut self, msg: WsFrame) -> std::io::Result<()> {
-        let mut ws = Ws::new();
-        let bytes = &mut self.buffers[1];
-        ws.encode(msg, bytes).unwrap();
-        self.writer.write_all(bytes).await
-    }
-}
-
-pub struct Receiver<'a, Codec> {
-    reader: ReadHalf<'a>,
-    buf: BytesMut,
-    _marker: PhantomData<Codec>,
-}
-
-impl<'a, Codec> Receiver<'a, Codec> {
-    pub fn new(reader: ReadHalf<'a>) -> Self {
-        Self {
-            reader,
-            buf: BytesMut::new(),
-            _marker: PhantomData,
-        }
-    }
-
-    pub async fn next(&mut self) -> std::io::Result<WsFrame> {
-        let mut ws = Ws::new();
-
-        self.reader.read_buf(&mut self.buf).await?;
-
-        let mut res = ws.decode(&mut self.buf);
-
-        while let Ok(None) = res {
-            self.reader.read_buf(&mut self.buf).await?;
-            res = ws.decode(&mut self.buf);
-        }
-
-        self.buf.clear();
-
-        match res.unwrap() {
-            Some(msg) => return Ok(msg),
-            _ => unreachable!(),
-        }
-    }
 }
 
 impl<'a, Codec> Context<'a, Codec> {
@@ -129,5 +70,64 @@ impl<'a> Context<'a, Http<Body>> {
         http.encode(resp, &mut bytes).unwrap();
 
         self.stream.write_all(&bytes).await
+    }
+}
+
+pub struct Sender<'a, Codec> {
+    writer: WriteHalf<'a>,
+    buffers: [BytesMut; 2],
+    _marker: PhantomData<Codec>,
+}
+
+impl<'a, Codec> Sender<'a, Codec> {
+    pub fn new(writer: WriteHalf<'a>) -> Self {
+        Self {
+            writer,
+            buffers: [BytesMut::new(), BytesMut::new()],
+            _marker: PhantomData,
+        }
+    }
+
+    pub async fn write(&mut self, msg: WsFrame) -> std::io::Result<()> {
+        let mut ws = Ws::new();
+        let bytes = &mut self.buffers[1];
+        ws.encode(msg, bytes).unwrap();
+        self.writer.write_all(bytes).await
+    }
+}
+
+pub struct Receiver<'a, Codec> {
+    reader: ReadHalf<'a>,
+    buf: BytesMut,
+    _marker: PhantomData<Codec>,
+}
+
+impl<'a, Codec> Receiver<'a, Codec> {
+    pub fn new(reader: ReadHalf<'a>) -> Self {
+        Self {
+            reader,
+            buf: BytesMut::new(),
+            _marker: PhantomData,
+        }
+    }
+
+    pub async fn next(&mut self) -> std::io::Result<WsFrame> {
+        let mut ws = Ws::new();
+
+        self.reader.read_buf(&mut self.buf).await?;
+
+        let mut res = ws.decode(&mut self.buf);
+
+        while let Ok(None) = res {
+            self.reader.read_buf(&mut self.buf).await?;
+            res = ws.decode(&mut self.buf);
+        }
+
+        self.buf.clear();
+
+        match res.unwrap() {
+            Some(msg) => return Ok(msg),
+            _ => unreachable!(),
+        }
     }
 }

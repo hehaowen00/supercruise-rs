@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>WebSocket client</title>
 </head>
+
 <body>
   <input type="text" id="username" placeholder="username" />
   <input type="text" id="message" placeholder="message" />
@@ -17,13 +19,12 @@
       let username = document.querySelector("#username").value;
       let message = document.querySelector("#message").value;
       let timestamp = new Date().toLocaleString();
-
-      client.send(JSON.stringify({ timestamp, username, message }));
-      displayMessage({ timestamp, username, message });
+      client.send(JSON.stringify({timestamp, username, message}));
+      document.querySelector("#message").value = "";
     }
 
     function displayMessage(data) {
-      const { username, message } = data;
+      const {username, message} = data;
       let timestamp = '[' + data.timestamp + '] ';
       let p = document.createElement("p");
       p.innerText = `${timestamp} ${username} says: ${message}`;
@@ -41,20 +42,20 @@
       result.appendChild(p);
     }
 
-    client.onopen = function(evt) {
+    client.onopen = function (evt) {
       logEvent('connected');
     };
 
-    client.onclose = function(evt) {
+    client.onclose = function (evt) {
       logEvent('disconnected');
     };
 
-    client.onmessage = function(evt) {
+    client.onmessage = function (evt) {
       let data = JSON.parse(evt.data);
-      displayMessage({ ...data });
+      displayMessage({...data});
     };
 
-    client.onerror = function(evt) {
+    client.onerror = function (evt) {
       logEvent("error: ", evt);
     };
   </script>
