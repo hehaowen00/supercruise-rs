@@ -75,7 +75,7 @@ impl<'a> Context<'a, Http<Body>> {
 
 pub struct Sender<'a, Codec> {
     writer: WriteHalf<'a>,
-    buffers: [BytesMut; 2],
+    buf: BytesMut,
     _marker: PhantomData<Codec>,
 }
 
@@ -83,16 +83,18 @@ impl<'a, Codec> Sender<'a, Codec> {
     pub fn new(writer: WriteHalf<'a>) -> Self {
         Self {
             writer,
-            buffers: [BytesMut::new(), BytesMut::new()],
+            buf: BytesMut::new(),
             _marker: PhantomData,
         }
     }
 
     pub async fn write(&mut self, msg: WsFrame) -> std::io::Result<()> {
         let mut ws = Ws::new();
-        let bytes = &mut self.buffers[1];
-        ws.encode(msg, bytes).unwrap();
-        self.writer.write_all(bytes).await
+        ws.encode(msg, &mut self.buf).unwrap();
+
+        let res = self.writer.write_all(&self.buf).await;
+        self.buf.clear();
+        res
     }
 }
 

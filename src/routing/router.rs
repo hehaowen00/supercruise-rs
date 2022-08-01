@@ -167,7 +167,7 @@ impl HttpRoute for NotFound {
             .body(String::from("404 Not Found").into())
             .unwrap();
 
-        log::error!("404 Not Found {}", req.uri().path());
+        log::warn!("404 Not Found {}", req.uri().path());
 
         Ok(resp)
     }

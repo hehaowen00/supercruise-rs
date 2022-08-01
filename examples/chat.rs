@@ -58,7 +58,6 @@ impl Route<Ws> for Chat {
                 },
                 evt = chat_rx.recv() => {
                     if let Ok((id, data)) = evt {
-                        log::debug!("{}", id);
                         let frame = WsFrame::builder().text(data);
                         tx.write(frame).await?;
                     }

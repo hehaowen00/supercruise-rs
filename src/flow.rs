@@ -133,14 +133,11 @@ async fn process(router: Arc<Router>, stream: &mut TcpStream) -> std::io::Result
 
         match &*r {
             Endpoint::Http(r) => {
-                log::debug!("http endpoint");
-
                 let mut context: Context<Http<_>> = Context::from(stream);
                 let resp = r.handle(&req, &params).await?;
                 context.send(resp).await?;
             }
             Endpoint::Ws(r) => {
-                log::debug!("websocket endpoint");
                 WsUpgrader::upgrade(stream, &req).await?;
 
                 let mut context = Context::<Ws>::from(stream);
