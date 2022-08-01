@@ -4,7 +4,10 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use supercruise_rs::prelude::{context, *};
+use supercruise_rs::{
+    prelude::{context, *},
+    routing::FnOutput,
+};
 use tokio::sync::broadcast;
 
 static CHAT: Lazy<ChatHandle> = Lazy::new(|| ChatHandle::new());
@@ -13,16 +16,16 @@ static HTML: &'static str = include_str!("chat.html");
 struct Chat {
     id: AtomicUsize,
     tx: broadcast::Sender<(usize, Vec<u8>)>,
-    rx: broadcast::Receiver<(usize, Vec<u8>)>,
+    _rx: broadcast::Receiver<(usize, Vec<u8>)>,
 }
 
 impl Chat {
     pub fn new() -> Self {
-        let (tx, rx) = broadcast::channel(64);
+        let (tx, _rx) = broadcast::channel(64);
         Self {
             id: AtomicUsize::new(0),
             tx,
-            rx,
+            _rx,
         }
     }
 }
@@ -57,7 +60,7 @@ impl Route<Ws> for Chat {
                     }
                 },
                 evt = chat_rx.recv() => {
-                    if let Ok((id, data)) = evt {
+                    if let Ok((_, data)) = evt {
                         let frame = WsFrame::builder().text(data);
                         tx.write(frame).await?;
                     }
@@ -101,15 +104,8 @@ impl Route<Ws> for ChatHandle {
     }
 }
 
-struct Index;
-
-#[async_trait::async_trait]
-impl HttpRoute for Index {
-    async fn handle(
-        &self,
-        _req: &Request<Body>,
-        _params: &Params,
-    ) -> std::io::Result<Response<Body>> {
+fn index(_req: &Request<Body>, _params: &Params) -> FnOutput<Response<Body>> {
+    Box::pin(async {
         let resp: Response<Body> = Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "text/html")
@@ -118,12 +114,12 @@ impl HttpRoute for Index {
             .unwrap();
 
         Ok(resp)
-    }
+    })
 }
 
 fn make_router() -> Router {
     Router::builder()
-        .get("/", Index {})
+        .get("/", wrap(index))
         .ws("/chat", CHAT.clone())
         .finalize()
 }

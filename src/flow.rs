@@ -8,8 +8,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
-// use tracing::info;
-// use tracing_subscriber;
 
 pub fn serve<F>(addr: &'static str, router_fn: F)
 where
