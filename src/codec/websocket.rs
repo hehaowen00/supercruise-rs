@@ -119,15 +119,14 @@ pub enum Opcode {
 
 impl From<u8> for Opcode {
     fn from(val: u8) -> Self {
-        use Opcode::*;
         match val {
-            0x0 => CONTINUATION,
-            0x1 => TEXT,
-            0x2 => BINARY,
-            0x8 => CLOSE,
-            0x9 => PING,
-            0xA => PONG,
-            _ => panic!(),
+            0x0 => Opcode::CONTINUATION,
+            0x1 => Opcode::TEXT,
+            0x2 => Opcode::BINARY,
+            0x8 => Opcode::CLOSE,
+            0x9 => Opcode::PING,
+            0xA => Opcode::PONG,
+            _ => unreachable!(),
         }
     }
 }
@@ -159,13 +158,12 @@ impl Decoder for Ws {
         let fin = (fin_opcode & FIN) == 128;
         let opcode: Opcode = (fin_opcode & 0b0111_1111).into();
 
-        if self.data.is_some() && opcode != CONTINUATION {
+        if self.data.is_some() && opcode != Opcode::CONTINUATION {
             return Err(());
         }
 
-        use Opcode::*;
         match opcode {
-            TEXT | BINARY | PING | PONG | CLOSE => {
+            Opcode::TEXT | Opcode::BINARY | Opcode::PING | Opcode::PONG | Opcode::CLOSE => {
                 self.opcode = Some(opcode.clone());
             }
             _ => {}
@@ -245,12 +243,10 @@ impl Encoder<WsFrame> for Ws {
     fn encode(&mut self, item: WsFrame, dest: &mut BytesMut) -> Result<(), Self::Error> {
         let mut rng = thread_rng();
 
-        use Opcode::*;
-
         let mask_bit = if item.masked { MASK } else { 0 };
 
         match item.opcode {
-            BINARY | TEXT => {
+            Opcode::BINARY | Opcode::TEXT => {
                 let fin_opcode = FIN | item.opcode as u8;
 
                 /*
@@ -283,7 +279,7 @@ impl Encoder<WsFrame> for Ws {
 
                 dest.extend_from_slice(&temp);
             }
-            CLOSE | PING | PONG => {
+            Opcode::CLOSE | Opcode::PING | Opcode::PONG => {
                 let fin_opcode = FIN | item.opcode as u8;
 
                 let mask_length = 0;

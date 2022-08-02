@@ -1,4 +1,4 @@
-use crate::codec::prelude::*;
+use crate::codec::{http::Http, Encoder};
 use crate::context::Body;
 use base64::encode;
 use bytes::BytesMut;
@@ -6,15 +6,57 @@ use http::header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE}
 use http::{Request, Response, StatusCode};
 use sha::sha1::Sha1;
 use sha::utils::{Digest, DigestExt};
+use std::fmt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 pub struct WsUpgrader;
 
+#[derive(Debug)]
+pub enum WsUpgradeError {
+    UpgradeFailed,
+}
+
+impl std::fmt::Display for WsUpgradeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UpgradeFailed => f.write_str("websocket upgrade failed"),
+        }
+    }
+}
+
+impl std::error::Error for WsUpgradeError {}
+
+#[derive(Debug)]
+pub enum ErrorEnum {
+    IO(std::io::Error),
+    Ws(WsUpgradeError),
+}
+
+impl std::error::Error for ErrorEnum {}
+
+impl std::fmt::Display for ErrorEnum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IO(err) => err.fmt(f),
+            Self::Ws(err) => err.fmt(f),
+        }
+    }
+}
+
+impl From<std::io::Error> for ErrorEnum {
+    fn from(err: std::io::Error) -> Self {
+        Self::IO(err)
+    }
+}
+
 impl WsUpgrader {
     const WS_KEY: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    pub async fn upgrade(stream: &mut TcpStream, req: &Request<Body>) -> std::io::Result<()> {
+    pub async fn upgrade(
+        stream: &mut TcpStream,
+        req: &Request<Body>,
+    ) -> std::result::Result<(), ErrorEnum> {
         let headers = req.headers();
         let mut buf = BytesMut::new();
 
@@ -29,7 +71,7 @@ impl WsUpgrader {
             http.encode(resp, &mut buf).unwrap();
             stream.write(&buf).await?;
 
-            return Err(std::io::Error::other("upgrade failed"));
+            return Err(ErrorEnum::Ws(WsUpgradeError::UpgradeFailed));
         }
 
         let mut builder = Response::builder()

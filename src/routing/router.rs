@@ -4,8 +4,7 @@ use crate::routing::route::{HttpRoute, Route};
 use async_trait::async_trait;
 use http::{Method, Request, Response};
 use std::sync::Arc;
-use trie_rs::path::node::{PathTrie, TrieBuilder};
-use trie_rs::path::params::Params;
+use trie_rs::path::{Params, PathTrie, TrieBuilder};
 
 pub struct Router {
     get_routes: PathTrie<Arc<Endpoint>>,

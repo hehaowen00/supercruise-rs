@@ -1,7 +1,11 @@
-use crate::codec::prelude::*;
+use crate::codec::{
+    http::Http,
+    websocket::{Ws, WsFrame},
+    Decoder,
+};
 use crate::context::{Body, Context};
 use crate::routing::{Endpoint, Router};
-use crate::ws::WsUpgrader;
+use crate::ws::{ErrorEnum, WsUpgrader};
 use bytes::BytesMut;
 use http::{Request, Response, StatusCode};
 use std::net::SocketAddr;
@@ -45,7 +49,10 @@ where
     }
 }
 
-async fn worker(addr: SocketAddr, router: Router) -> Result<(), Box<dyn std::error::Error>> {
+async fn worker(
+    addr: SocketAddr,
+    router: Router,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let socket = socket2::Socket::new(
         match addr {
             SocketAddr::V4(_) => socket2::Domain::IPV4,
@@ -74,24 +81,30 @@ async fn worker(addr: SocketAddr, router: Router) -> Result<(), Box<dyn std::err
 
         tokio::spawn(async move {
             if let Err(e) = process(instance, &mut socket).await {
-                if e.kind() == std::io::ErrorKind::ConnectionReset {
-                    return;
+                match e {
+                    ErrorEnum::IO(ref err) => match err.kind() {
+                        std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::ConnectionRefused => {}
+                        e => {
+                            let resp = Response::builder()
+                                .status(StatusCode::REQUEST_TIMEOUT)
+                                .body(().into())
+                                .unwrap();
+
+                            let mut ctx: Context<Http<_>> = Context::from(&mut socket);
+                            let _ = ctx.send(resp).await;
+                            log::debug!("error {}", e);
+                        }
+                    },
+                    _ => {}
                 }
-
-                let resp = Response::builder()
-                    .status(StatusCode::REQUEST_TIMEOUT)
-                    .body(().into())
-                    .unwrap();
-
-                let mut ctx: Context<Http<_>> = Context::from(&mut socket);
-                let _ = ctx.send(resp).await;
-                log::error!("runtime error {:?}", e);
             }
         });
     }
 }
 
-async fn process(router: Arc<Router>, stream: &mut TcpStream) -> std::io::Result<()> {
+async fn process(router: Arc<Router>, stream: &mut TcpStream) -> Result<(), ErrorEnum> {
     let mut bytes = BytesMut::new();
     stream.set_nodelay(true).unwrap();
 
