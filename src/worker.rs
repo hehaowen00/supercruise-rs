@@ -27,26 +27,23 @@ where
 
     log::info!("server started on http://{:?}", addr);
 
-    let mut handles = Vec::new();
+    let handles: Vec<_> = (0..num_cpus::get())
+        .map(|_| spawn_worker(addr, router_fn()))
+        .collect();
 
-    for _ in 0..num_cpus::get() {
-        let instance = router_fn();
-        let h = std::thread::spawn(move || {
-            let res = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(worker(addr, instance));
+    handles.into_iter().for_each(|h| h.join().unwrap());
+}
 
-            log::error!("runtime exited: {:?}", res);
-        });
+fn spawn_worker(addr: SocketAddr, router: Router) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let res = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(worker(addr, router));
 
-        handles.push(h);
-    }
-
-    for h in handles {
-        h.join().unwrap();
-    }
+        log::error!("runtime exited: {:?}", res);
+    })
 }
 
 async fn worker(
@@ -74,10 +71,9 @@ async fn worker(
 
     loop {
         let (mut socket, addr) = incoming.accept().await?;
+        let instance = router.clone();
 
         log::debug!("new connection {:?}", addr);
-
-        let instance = router.clone();
 
         tokio::spawn(async move {
             if let Err(e) = process(instance, &mut socket).await {
@@ -92,7 +88,7 @@ async fn worker(
                                 .body(().into())
                                 .unwrap();
 
-                            let mut ctx: Context<Http<_>> = Context::from(&mut socket);
+                            let mut ctx = Context::<Http<_>>::from(&mut socket);
                             let _ = ctx.send(resp).await;
                             log::debug!("error {}", e);
                         }
