@@ -9,7 +9,6 @@ use crate::ws::{ErrorEnum, WsUpgrader};
 use bytes::BytesMut;
 use http::{Request, Response, StatusCode};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -64,10 +63,10 @@ async fn worker(
     socket.set_reuse_port(true).unwrap();
     socket.set_nonblocking(true).unwrap();
     socket.bind(&addr.into()).unwrap();
-    socket.listen(0).unwrap();
+    socket.listen(8192).unwrap();
 
     let incoming = TcpListener::from_std(socket.into()).unwrap();
-    let router = Arc::new(router);
+    let router: &'static Router = Box::leak(Box::new(router));
 
     loop {
         let (mut socket, addr) = incoming.accept().await?;
@@ -76,7 +75,7 @@ async fn worker(
         log::debug!("new connection {:?}", addr);
 
         tokio::spawn(async move {
-            if let Err(e) = process(instance, &mut socket).await {
+            if let Err(e) = process(&instance, &mut socket).await {
                 match e {
                     ErrorEnum::IO(ref err) => match err.kind() {
                         std::io::ErrorKind::ConnectionAborted
@@ -100,8 +99,8 @@ async fn worker(
     }
 }
 
-async fn process(router: Arc<Router>, stream: &mut TcpStream) -> Result<(), ErrorEnum> {
-    let mut bytes = BytesMut::new();
+async fn process(router: &'static Router, stream: &mut TcpStream) -> Result<(), ErrorEnum> {
+    let mut bytes = BytesMut::with_capacity(8192);
     stream.set_nodelay(true).unwrap();
 
     loop {
@@ -132,16 +131,16 @@ async fn process(router: Arc<Router>, stream: &mut TcpStream) -> Result<(), Erro
 
         let mut close = false;
 
-        if let Some(v) = req.headers().get("Connection") {
-            if v == "close" {
-                close = true;
-            }
-        }
-
         match &*r {
             Endpoint::Http(r) => {
                 let mut context: Context<Http<_>> = Context::from(stream);
                 let resp = r.handle(&req, &params).await?;
+                if let Some(v) = resp.headers().get("Connection") {
+                    if v == "close" {
+                        close = true;
+                    }
+                }
+
                 context.send(resp).await?;
             }
             Endpoint::Ws(r) => {

@@ -94,6 +94,7 @@ impl Clone for ChatHandle {
 
 #[async_trait]
 impl Route<Ws> for ChatHandle {
+    #[inline]
     async fn handle(
         &self,
         tx: &mut context::Sender<Ws>,
