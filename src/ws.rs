@@ -1,14 +1,12 @@
-use crate::codec::{http::Http, Encoder};
-use crate::context::Body;
+use crate::codec::{http::Http, websocket::Ws};
+use crate::context::{Body, Receiver, Sender};
+use crate::error::ErrorEnum;
 use base64::encode;
-use bytes::BytesMut;
-use http::header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE};
+use http::header::{CONNECTION, CONTENT_TYPE, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE};
 use http::{Request, Response, StatusCode};
 use sha::sha1::Sha1;
 use sha::utils::{Digest, DigestExt};
 use std::fmt;
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
 
 pub struct WsUpgrader;
 
@@ -27,51 +25,26 @@ impl std::fmt::Display for WsUpgradeError {
 
 impl std::error::Error for WsUpgradeError {}
 
-#[derive(Debug)]
-pub enum ErrorEnum {
-    IO(std::io::Error),
-    Ws(WsUpgradeError),
-}
-
-impl std::error::Error for ErrorEnum {}
-
-impl std::fmt::Display for ErrorEnum {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IO(err) => err.fmt(f),
-            Self::Ws(err) => err.fmt(f),
-        }
-    }
-}
-
-impl From<std::io::Error> for ErrorEnum {
-    fn from(err: std::io::Error) -> Self {
-        Self::IO(err)
-    }
-}
-
 impl WsUpgrader {
     const WS_KEY: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    pub async fn upgrade(
-        stream: &mut TcpStream,
+    pub async fn upgrade<'a>(
+        mut tx: Sender<'a, Http<Body>>,
+        rx: Receiver<'a, Http<Body>>,
         req: &Request<Body>,
-    ) -> std::result::Result<(), ErrorEnum> {
+    ) -> std::result::Result<(Sender<'a, Ws>, Receiver<'a, Ws>), ErrorEnum> {
         let headers = req.headers();
-        let mut buf = BytesMut::new();
 
         if !headers.contains_key(CONNECTION) || !headers.contains_key(SEC_WEBSOCKET_KEY) {
             let resp: Response<Body> = Response::builder()
                 .status(401)
-                .header("Content-Type", "text/plain")
+                .header(CONTENT_TYPE, "text/plain")
                 .body("400 Bad Request".into())
                 .unwrap();
 
-            let mut http: Http<_> = Http::new();
-            http.encode(resp, &mut buf).unwrap();
-            stream.write(&buf).await?;
+            tx.send(resp).await?;
 
-            return Err(ErrorEnum::Ws(WsUpgradeError::UpgradeFailed));
+            return Err(ErrorEnum::Other(Box::new(WsUpgradeError::UpgradeFailed)));
         }
 
         let mut builder = Response::builder()
@@ -97,13 +70,11 @@ impl WsUpgrader {
 
         let resp = builder
             .status(StatusCode::SWITCHING_PROTOCOLS)
-            .body(())
+            .body(().into())
             .unwrap();
 
-        let mut http: Http<()> = Http::new();
-        http.encode(resp, &mut buf).unwrap();
-        stream.write(&buf).await?;
+        tx.send(resp).await?;
 
-        Ok(())
+        Ok((tx.to::<Ws>(), rx.to::<Ws>()))
     }
 }

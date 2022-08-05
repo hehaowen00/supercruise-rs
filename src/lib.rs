@@ -1,5 +1,6 @@
 pub mod codec;
 pub mod context;
+pub mod error;
 pub mod routing;
 pub mod worker;
 mod ws;

@@ -1,4 +1,5 @@
 use crate::context::{Body, Receiver, Sender};
+use crate::error::ErrorEnum;
 use async_trait::async_trait;
 use http::{Request, Response};
 use std::future::Future;
@@ -21,7 +22,7 @@ pub trait HttpRoute: Send + Sync {
         &self,
         req: &Request<Body>,
         params: &params::Params,
-    ) -> std::io::Result<Response<Body>>;
+    ) -> Result<Response<Body>, ErrorEnum>;
 }
 
 pub struct Wrap {
@@ -34,7 +35,7 @@ impl HttpRoute for Wrap {
         &self,
         req: &Request<Body>,
         params: &params::Params,
-    ) -> std::io::Result<Response<Body>> {
+    ) -> Result<Response<Body>, ErrorEnum> {
         (self.f)(req, params).await
     }
 }
@@ -43,4 +44,4 @@ pub fn wrap(f: fn(&Request<Body>, &params::Params) -> FnOutput<Response<Body>>) 
     Wrap { f }
 }
 
-pub type FnOutput<T> = Pin<Box<dyn Future<Output = std::io::Result<T>> + Send>>;
+pub type FnOutput<T> = Pin<Box<dyn Future<Output = Result<T, ErrorEnum>> + Send>>;

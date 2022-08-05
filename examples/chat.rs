@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use http::header::{CONNECTION, CONTENT_TYPE};
 use once_cell::sync::Lazy;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -50,10 +51,10 @@ impl Route<Ws> for Chat {
                             chat_tx.send((chat_id, frame.data().to_vec())).unwrap();
                         }
                         Opcode::PING => {
-                            tx.write(WsFrame::builder().pong()).await?;
+                            tx.send(WsFrame::builder().pong()).await?;
                         }
                         Opcode::PONG => {
-                            tx.write(WsFrame::builder().ping()).await?;
+                            tx.send(WsFrame::builder().ping()).await?;
                         }
                         Opcode::CLOSE => break,
                         _ => {}
@@ -62,7 +63,7 @@ impl Route<Ws> for Chat {
                 evt = chat_rx.recv() => {
                     if let Ok((_, data)) = evt {
                         let frame = WsFrame::builder().text(data);
-                        tx.write(frame).await?;
+                        tx.send(frame).await?;
                     }
                 }
             }
@@ -107,12 +108,11 @@ impl Route<Ws> for ChatHandle {
 
 fn index(_req: &Request<Body>, _params: &Params) -> FnOutput<Response<Body>> {
     Box::pin(async {
-        let resp: Response<Body> = Response::builder()
+        let resp = Response::builder()
             .status(StatusCode::OK)
-            .header("Content-Type", "text/html")
-            .header("Connection", "keep-alive")
-            .body(HTML.into())
-            .unwrap();
+            .header(CONNECTION, "keep-alive")
+            .header(CONTENT_TYPE, "text/html")
+            .body(HTML.into())?;
 
         Ok(resp)
     })

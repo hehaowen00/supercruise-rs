@@ -1,7 +1,9 @@
 use crate::codec::websocket::Ws;
 use crate::context::Body;
+use crate::error::ErrorEnum;
 use crate::routing::route::{HttpRoute, Route};
 use async_trait::async_trait;
+use http::header::{CONTENT_TYPE, UPGRADE};
 use http::{Method, Request, Response};
 use std::sync::Arc;
 use trie_rs::path::{Params, PathTrie, TrieBuilder};
@@ -33,7 +35,7 @@ impl Router {
         let path = req.uri().path();
         let method = req.method();
 
-        if let Some(value) = req.headers().get("Upgrade") {
+        if let Some(value) = req.headers().get(UPGRADE) {
             if value == "websocket" {
                 return match self.ws.get(path) {
                     Some((r, params)) => (r.clone(), params),
@@ -70,7 +72,7 @@ pub struct RouterBuilder {
     put_routes: TrieBuilder<Arc<Endpoint>>,
     delete_routes: TrieBuilder<Arc<Endpoint>>,
     ws: TrieBuilder<Arc<Endpoint>>,
-    not_found: Option<Arc<Endpoint>>,
+    not_found: Arc<Endpoint>,
 }
 
 impl RouterBuilder {
@@ -81,7 +83,7 @@ impl RouterBuilder {
             put_routes: TrieBuilder::new(),
             delete_routes: TrieBuilder::new(),
             ws: TrieBuilder::new(),
-            not_found: Some(Arc::new(Endpoint::Http(Box::new(NotFound {})))),
+            not_found: Arc::new(Endpoint::Http(Box::new(NotFound {}))),
         }
     }
 
@@ -135,7 +137,7 @@ impl RouterBuilder {
         R: HttpRoute + Send + Sync + 'static,
     {
         let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
-        self.not_found = Some(route);
+        self.not_found = route;
         self
     }
 
@@ -146,7 +148,7 @@ impl RouterBuilder {
             put_routes: self.put_routes.finalize(),
             delete_routes: self.delete_routes.finalize(),
             ws: self.ws.finalize(),
-            not_found: self.not_found.unwrap(),
+            not_found: self.not_found,
         }
     }
 }
@@ -159,12 +161,11 @@ impl HttpRoute for NotFound {
         &self,
         req: &Request<Body>,
         _params: &Params,
-    ) -> std::io::Result<Response<Body>> {
+    ) -> Result<Response<Body>, ErrorEnum> {
         let resp: Response<Body> = Response::builder()
             .status(404)
-            .header("Content-Type", "text/html")
-            .body(String::from("404 Not Found").into())
-            .unwrap();
+            .header(CONTENT_TYPE, "text/html")
+            .body("404 Not Found".into())?;
 
         log::warn!("404 Not Found {}", req.uri().path());
 

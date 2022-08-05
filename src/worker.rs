@@ -1,15 +1,10 @@
-use crate::codec::{
-    http::Http,
-    websocket::{Ws, WsFrame},
-    Decoder,
-};
+use crate::codec::{http::Http, websocket::WsFrame};
 use crate::context::{Body, Context};
+use crate::error::ErrorEnum;
 use crate::routing::{Endpoint, Router};
-use crate::ws::{ErrorEnum, WsUpgrader};
-use bytes::BytesMut;
-use http::{Request, Response, StatusCode};
+use crate::ws::WsUpgrader;
+use http::{header::CONNECTION, Request, Response, StatusCode};
 use std::net::SocketAddr;
-use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 
 pub fn serve<F>(addr: &'static str, router_fn: F)
@@ -24,7 +19,7 @@ where
         }
     };
 
-    log::info!("server started on http://{:?}", addr);
+    log::info!("Server started on http://{:?}", addr);
 
     let handles: Vec<_> = (0..num_cpus::get())
         .map(|_| spawn_worker(addr, router_fn()))
@@ -75,6 +70,8 @@ async fn worker(
         log::debug!("new connection {:?}", addr);
 
         tokio::spawn(async move {
+            socket.set_nodelay(true).unwrap();
+
             if let Err(e) = process(&instance, &mut socket).await {
                 match e {
                     ErrorEnum::IO(ref err) => match err.kind() {
@@ -100,32 +97,9 @@ async fn worker(
 }
 
 async fn process(router: &'static Router, stream: &mut TcpStream) -> Result<(), ErrorEnum> {
-    let mut bytes = BytesMut::with_capacity(8192);
-    stream.set_nodelay(true).unwrap();
-
     loop {
-        let mut codec = Http::new();
-        if stream.read_buf(&mut bytes).await? == 0 {
-            return Ok(());
-        }
-
-        let mut res = codec.decode(&mut bytes);
-
-        while let Ok(None) = res {
-            if stream.read_buf(&mut bytes).await? == 0 {
-                return Ok(());
-            }
-
-            res = codec.decode(&mut bytes);
-        }
-
-        let req: Request<Body> = match res {
-            Ok(Some(req)) => req,
-            _ => {
-                log::error!("failed to parse request bytes");
-                return Ok(());
-            }
-        };
+        let (mut tx, mut rx) = Context::<Http<_>>::split_stream(stream);
+        let req: Request<Body> = rx.next().await?;
 
         let (r, params) = router.route(&req);
 
@@ -133,25 +107,22 @@ async fn process(router: &'static Router, stream: &mut TcpStream) -> Result<(), 
 
         match &*r {
             Endpoint::Http(r) => {
-                let mut context: Context<Http<_>> = Context::from(stream);
                 let resp = r.handle(&req, &params).await?;
-                if let Some(v) = resp.headers().get("Connection") {
+
+                if let Some(v) = resp.headers().get(CONNECTION) {
                     if v == "close" {
                         close = true;
                     }
                 }
 
-                context.send(resp).await?;
+                tx.send(resp).await?;
             }
             Endpoint::Ws(r) => {
-                WsUpgrader::upgrade(stream, &req).await?;
-
-                let mut context = Context::<Ws>::from(stream);
-                let (mut tx, mut rx) = context.split();
+                let (mut tx, mut rx) = WsUpgrader::upgrade(tx, rx, &req).await?;
                 r.handle(&mut tx, &mut rx, &params).await?;
 
                 let close = WsFrame::builder().close();
-                tx.write(close).await?;
+                tx.send(close).await?;
 
                 break;
             }

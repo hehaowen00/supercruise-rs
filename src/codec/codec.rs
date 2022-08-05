@@ -1,7 +1,5 @@
 use bytes::BytesMut;
 
-pub trait Codec<I>: Encoder<I> + Decoder {}
-
 pub trait Encoder<I> {
     type Error;
 
