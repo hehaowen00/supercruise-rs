@@ -23,17 +23,17 @@ impl Decoder for Http<Body> {
             return Ok(None);
         }
 
-        let mut headers = [None; 32];
+        let mut headers = [None; 64];
 
         let (method, path, version, amt) = {
-            let mut parsed = [httparse::EMPTY_HEADER; 32];
+            let mut parsed = [httparse::EMPTY_HEADER; 64];
             let mut r = httparse::Request::new(&mut parsed);
 
             let amt = match r.parse(src) {
                 Ok(httparse::Status::Complete(amt)) => amt,
                 Ok(httparse::Status::Partial) => return Ok(None),
-                e => {
-                    log::error!("codec http amt {:?}", e);
+                Err(e) => {
+                    log::error!("codec http amt {}", e);
                     return Err(());
                 }
             };
@@ -59,6 +59,7 @@ impl Decoder for Http<Body> {
         };
 
         if version != 1 {
+            log::error!("wrong http version");
             return Err(());
         }
 

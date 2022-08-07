@@ -1,6 +1,7 @@
 pub mod codec;
 pub mod context;
 pub mod error;
+pub mod mio;
 pub mod routing;
 pub mod worker;
 mod ws;
