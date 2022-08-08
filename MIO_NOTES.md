@@ -90,3 +90,6 @@ Running 10s test @ http://127.0.0.1:8080/
 Requests/sec: 953472.81
 Transfer/sec:      1.60GB
 ```
+
+solution: reregister the server socket with poll
+performance is significantly reduced from 3 million requests per second to 1 million / tokio performance

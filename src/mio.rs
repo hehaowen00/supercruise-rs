@@ -55,10 +55,10 @@ pub fn mio_worker(addr: SocketAddr) {
     let mut poll = Poll::new().unwrap();
     let mut events = Events::with_capacity(1);
 
-    let mut server = TcpListener::from_std(socket.into());
+    let mut listener = TcpListener::from_std(socket.into());
 
     poll.registry()
-        .register(&mut server, SERVER, Interest::READABLE)
+        .register(&mut listener, SERVER, Interest::READABLE)
         .unwrap();
 
     let mut connections = Slab::new();
@@ -70,8 +70,9 @@ pub fn mio_worker(addr: SocketAddr) {
 
         for event in events.iter() {
             match event.token() {
-                SERVER => match server.accept() {
+                SERVER => match listener.accept() {
                     Ok((socket, _addr)) => {
+                        socket.set_nodelay(true).unwrap();
                         let idx = connections.insert(socket);
                         sessions.insert(false);
                         buffers.insert(([0; 8192], 0));
@@ -102,15 +103,15 @@ pub fn mio_worker(addr: SocketAddr) {
                             poll.registry().deregister(&mut conn).unwrap();
                         }
                         Ok(false) => {
-                            poll.registry()
-                                .reregister(
-                                    conn,
-                                    event.token(),
-                                    Interest::READABLE.add(Interest::WRITABLE),
-                                )
-                                .unwrap();
+                            // poll.registry()
+                            //     .reregister(
+                            //         conn,
+                            //         event.token(),
+                            //         Interest::READABLE.add(Interest::WRITABLE),
+                            //     )
+                            //     .unwrap();
                         }
-                        Err(err) => {
+                        Err(_) => {
                             let mut conn = connections.remove(conn_id(id));
                             sessions.remove(conn_id(id));
                             buffers.remove(conn_id(id));
@@ -120,6 +121,10 @@ pub fn mio_worker(addr: SocketAddr) {
                 }
             }
         }
+
+        poll.registry()
+            .reregister(&mut listener, SERVER, Interest::READABLE)
+            .unwrap();
     }
 }
 
@@ -158,6 +163,7 @@ fn handle_conn(
             }
             Ok(None) => return Ok(false),
             Err(_) => {
+                log::error!("failed to parse request");
                 return Ok(true);
             }
         }
