@@ -6,11 +6,15 @@ use http::{Request, Response};
 use std::fmt::{self, Write};
 use std::marker::PhantomData;
 
-pub struct Http<T>(PhantomData<T>);
+pub struct Http<T> {
+    _marker: PhantomData<T>,
+}
 
 impl<T> Http<T> {
     pub fn new() -> Self {
-        Http(PhantomData)
+        Http {
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -38,50 +42,34 @@ impl Decoder for Http<Body> {
                 }
             };
 
-            let to_slice = |a: &[u8]| {
-                let start = a.as_ptr() as usize - src.as_ptr() as usize;
-                assert!(start < src.len());
-                (start, start + a.len())
-            };
-
             for (i, header) in r.headers.iter().enumerate() {
-                let k = to_slice(header.name.as_bytes());
-                let v = to_slice(header.value);
+                let k = header.name;
+                let v = header.value;
                 headers[i] = Some((k, v));
             }
-
-            (
-                to_slice(r.method.unwrap().as_bytes()),
-                to_slice(r.path.unwrap().as_bytes()),
-                r.version.unwrap(),
-                amt,
-            )
+            (r.method.unwrap(), r.path.unwrap(), r.version.unwrap(), amt)
         };
 
         if version != 1 {
             return Err(());
         }
 
-        let data = src.split_to(amt).freeze();
-
-        let s = data.slice(path.0..path.1);
-        let s = unsafe { String::from_utf8_unchecked(Vec::from(s.as_ref())) };
-
         let mut builder = Request::builder()
-            .method(&data[method.0..method.1])
-            .uri(s)
+            .method(method)
+            .uri(path)
             .version(http::Version::HTTP_11);
 
         for header in headers.iter() {
             let (k, v) = match *header {
-                Some((ref k, ref v)) => (k, v),
+                Some((k, v)) => (k, v),
                 None => break,
             };
 
-            let value = HeaderValue::from_bytes(&data.slice(v.0..v.1).as_ref()).unwrap();
-            builder = builder.header(&data[k.0..k.1], value);
+            let value = HeaderValue::from_bytes(v).unwrap();
+            builder = builder.header(k, value);
         }
 
+        let _ = src.split_to(amt);
         let req = builder.body(Body::from(src)).unwrap();
 
         src.clear();

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use http::{Request, Response};
 use std::future::Future;
 use std::pin::Pin;
-use trie_rs::path::params;
+use trie_rs::params;
 
 #[async_trait]
 pub trait Route<Codec> {

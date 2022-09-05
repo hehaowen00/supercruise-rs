@@ -13,5 +13,5 @@ pub mod prelude {
     pub use crate::routing::{wrap, HttpRoute, Route, Router};
     pub use crate::worker::serve;
     pub use http::{Method, Request, Response, StatusCode};
-    pub use trie_rs::path::params::Params;
+    pub use trie_rs::params::Params;
 }

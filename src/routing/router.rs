@@ -4,7 +4,8 @@ use crate::routing::route::{HttpRoute, Route};
 use async_trait::async_trait;
 use http::{Method, Request, Response};
 use std::sync::Arc;
-use trie_rs::path::{Params, PathTrie, TrieBuilder};
+use trie_rs::params::Params;
+use trie_rs::path::PathTrie;
 
 pub struct Router {
     get_routes: PathTrie<Arc<Endpoint>>,
@@ -21,8 +22,68 @@ pub(crate) enum Endpoint {
 }
 
 impl Router {
-    pub fn builder() -> RouterBuilder {
-        RouterBuilder::new()
+    pub fn new() -> Self {
+        Self {
+            get_routes: PathTrie::new(),
+            post_routes: PathTrie::new(),
+            put_routes: PathTrie::new(),
+            delete_routes: PathTrie::new(),
+            ws: PathTrie::new(),
+            not_found: Arc::new(Endpoint::Http(Box::new(NotFound {}))),
+        }
+    }
+
+    pub fn get<R>(mut self, path: &str, route: R) -> Self
+    where
+        R: HttpRoute + Send + Sync + 'static,
+    {
+        self.get_routes
+            .insert(path, Arc::new(Endpoint::Http(Box::new(route))));
+        self
+    }
+
+    pub fn post<R>(mut self, path: &str, route: R) -> Self
+    where
+        R: HttpRoute + Send + Sync + 'static,
+    {
+        self.post_routes
+            .insert(path, Arc::new(Endpoint::Http(Box::new(route))));
+        self
+    }
+
+    pub fn put<R>(mut self, path: &str, route: R) -> Self
+    where
+        R: HttpRoute + Send + Sync + 'static,
+    {
+        self.put_routes
+            .insert(path, Arc::new(Endpoint::Http(Box::new(route))));
+        self
+    }
+
+    pub fn delete<R>(mut self, path: &str, route: R) -> Self
+    where
+        R: HttpRoute + Send + Sync + 'static,
+    {
+        self.delete_routes
+            .insert(path, Arc::new(Endpoint::Http(Box::new(route))));
+        self
+    }
+
+    pub fn ws<R>(mut self, path: &str, route: R) -> Self
+    where
+        R: Route<Ws> + Send + Sync + 'static,
+    {
+        self.ws
+            .insert(path, Arc::new(Endpoint::Ws(Box::new(route))));
+        self
+    }
+
+    pub fn not_found<R>(mut self, route: R) -> Self
+    where
+        R: HttpRoute + Send + Sync + 'static,
+    {
+        self.not_found = Arc::new(Endpoint::Http(Box::new(route)));
+        self
     }
 
     #[inline]
@@ -60,93 +121,6 @@ impl Router {
                 None => (self.not_found.clone(), Params::new()),
             },
             _ => (self.not_found.clone(), Params::new()),
-        }
-    }
-}
-
-pub struct RouterBuilder {
-    get_routes: TrieBuilder<Arc<Endpoint>>,
-    post_routes: TrieBuilder<Arc<Endpoint>>,
-    put_routes: TrieBuilder<Arc<Endpoint>>,
-    delete_routes: TrieBuilder<Arc<Endpoint>>,
-    ws: TrieBuilder<Arc<Endpoint>>,
-    not_found: Option<Arc<Endpoint>>,
-}
-
-impl RouterBuilder {
-    pub fn new() -> Self {
-        Self {
-            get_routes: TrieBuilder::new(),
-            post_routes: TrieBuilder::new(),
-            put_routes: TrieBuilder::new(),
-            delete_routes: TrieBuilder::new(),
-            ws: TrieBuilder::new(),
-            not_found: Some(Arc::new(Endpoint::Http(Box::new(NotFound {})))),
-        }
-    }
-
-    pub fn get<R>(mut self, path: &str, route: R) -> Self
-    where
-        R: HttpRoute + Send + Sync + 'static,
-    {
-        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
-        self.get_routes.insert(path, route);
-        self
-    }
-
-    pub fn post<R>(mut self, path: &str, route: R) -> Self
-    where
-        R: HttpRoute + Send + Sync + 'static,
-    {
-        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
-        self.post_routes.insert(path, route);
-        self
-    }
-
-    pub fn put<R>(mut self, path: &str, route: R) -> Self
-    where
-        R: HttpRoute + Send + Sync + 'static,
-    {
-        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
-        self.put_routes.insert(path, route);
-        self
-    }
-
-    pub fn delete<R>(mut self, path: &str, route: R) -> Self
-    where
-        R: HttpRoute + Send + Sync + 'static,
-    {
-        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
-        self.delete_routes.insert(path, route);
-        self
-    }
-
-    pub fn ws<R>(mut self, path: &str, route: R) -> Self
-    where
-        R: Route<Ws> + Send + Sync + 'static,
-    {
-        let route: Arc<Endpoint> = Arc::new(Endpoint::Ws(Box::new(route)));
-        self.ws.insert(path, route);
-        self
-    }
-
-    pub fn not_found<R>(mut self, route: R) -> Self
-    where
-        R: HttpRoute + Send + Sync + 'static,
-    {
-        let route: Arc<Endpoint> = Arc::new(Endpoint::Http(Box::new(route)));
-        self.not_found = Some(route);
-        self
-    }
-
-    pub fn finalize(self) -> Router {
-        Router {
-            get_routes: self.get_routes.finalize(),
-            post_routes: self.post_routes.finalize(),
-            put_routes: self.put_routes.finalize(),
-            delete_routes: self.delete_routes.finalize(),
-            ws: self.ws.finalize(),
-            not_found: self.not_found.unwrap(),
         }
     }
 }

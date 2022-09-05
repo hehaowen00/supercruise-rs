@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use supercruise_rs::{
     prelude::{context, *},
     routing::FnOutput,
@@ -119,10 +117,9 @@ fn index(_req: &Request<Body>, _params: &Params) -> FnOutput<Response<Body>> {
 }
 
 fn make_router() -> Router {
-    Router::builder()
+    Router::new()
         .get("/", wrap(index))
         .ws("/chat", CHAT.clone())
-        .finalize()
 }
 
 fn main() {
